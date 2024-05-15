@@ -5,12 +5,12 @@ import numpy as np
 from sysinit.futures.build_roll_calendars import (
     generate_approximate_calendar,
     adjust_to_price_series,
-    back_out_roll_calendar_from_multiple_prices,
+    # back_out_roll_calendar_from_multiple_prices,
 )
 from sysobjects.dict_of_futures_per_contract_prices import (
     dictFuturesContractFinalPrices,
 )
-from sysobjects.multiple_prices import futuresMultiplePrices
+# from sysobjects.multiple_prices import futuresMultiplePrices
 
 from sysobjects.rolls import rollParameters
 
@@ -61,23 +61,23 @@ class rollCalendar(pd.DataFrame):
 
         return roll_calendar
 
-    @classmethod
-    def back_out_from_multiple_prices(
-        rollCalendar, multiple_prices: futuresMultiplePrices
-    ):
-        """
-
-        :param multiple_prices: output from futuresDataForSim.FuturesData.get_current_and_forward_price_data(instrument_code)
-               columns: PRICE, FORWARD, FORWARD_CONTRACT, PRICE_CONTRACT
-
-        :return: rollCalendar
-        """
-        roll_calendar_as_pd = back_out_roll_calendar_from_multiple_prices(
-            multiple_prices
-        )
-        roll_calendar_object = rollCalendar(roll_calendar_as_pd)
-
-        return roll_calendar_object
+    # @classmethod
+    # def back_out_from_multiple_prices(
+    #     rollCalendar, multiple_prices: futuresMultiplePrices
+    # ):
+    #     """
+    #
+    #     :param multiple_prices: output from futuresDataForSim.FuturesData.get_current_and_forward_price_data(instrument_code)
+    #            columns: PRICE, FORWARD, FORWARD_CONTRACT, PRICE_CONTRACT
+    #
+    #     :return: rollCalendar
+    #     """
+    #     roll_calendar_as_pd = back_out_roll_calendar_from_multiple_prices(
+    #         multiple_prices
+    #     )
+    #     roll_calendar_object = rollCalendar(roll_calendar_as_pd)
+    #
+    #     return roll_calendar_object
 
     def check_if_date_index_monotonic(self) -> bool:
         if not self.index._is_strictly_monotonic_increasing:

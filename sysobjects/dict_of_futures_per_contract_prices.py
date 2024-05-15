@@ -90,6 +90,10 @@ class dictFuturesContractPrices(dict):
         )
         return object_repr
 
+    @property
+    def empty(self):
+        return len(self.keys()) == 0
+
     def final_prices(self) -> dictFuturesContractFinalPrices:
         """
 

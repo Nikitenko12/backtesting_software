@@ -5,13 +5,20 @@ import pandas as pd
 
 from syscore.pandas.full_merge_with_replacement import full_merge_of_existing_series
 from sysobjects.dict_of_named_futures_per_contract_prices import (
-    price_name,
     contract_name_from_column_name,
 )
-from sysobjects.multiple_prices import futuresMultiplePrices
+# from sysobjects.multiple_prices import futuresMultiplePrices
+from sysobjects.futures_per_contract_prices import (
+    PRICE_DATA_COLUMNS,
+    FINAL_COLUMN,
+    VOLUME_COLUMN,
+    NOT_VOLUME_COLUMNS,
+)
+from sysobjects.dict_of_futures_per_contract_prices import dictFuturesContractPrices
+from sysobjects.roll_calendars import rollCalendar
 
 
-class futuresAdjustedPrices(pd.Series):
+class futuresAdjustedPrices(pd.DataFrame):
     """
     adjusted price information
     """
@@ -31,9 +38,10 @@ class futuresAdjustedPrices(pd.Series):
         return futures_contract_prices
 
     @classmethod
-    def stitch_multiple_prices(
+    def stitch_individual_contracts_from_roll_calendars(
         futuresAdjustedPrices,
-        multiple_prices: futuresMultiplePrices,
+        individual_contracts: dictFuturesContractPrices,
+        roll_calendar: rollCalendar,
         forward_fill: bool = False,
     ):
         """
@@ -41,96 +49,112 @@ class futuresAdjustedPrices(pd.Series):
 
         If you want to change then override this method
 
-        :param multiple_prices: multiple prices object
+        :param individual_contracts: dict of individual futures prices
+        :param roll_calendar: rollCalendar
         :param forward_fill: forward fill prices and forwards before stitching
 
         :return: futuresAdjustedPrices
 
         """
-        adjusted_prices = _panama_stitch(multiple_prices, forward_fill)
+        adjusted_prices = _panama_stitch(individual_contracts, roll_calendar)
         return futuresAdjustedPrices(adjusted_prices)
 
-    def update_with_multiple_prices_no_roll(
-        self, updated_multiple_prices: futuresMultiplePrices
+    def update_with_individual_contract_prices_no_roll(
+        self,
+        individual_contracts: dictFuturesContractPrices,
+        roll_calendar: rollCalendar,
     ):
         """
         Update adjusted prices assuming no roll has happened
 
-        :param updated_multiple_prices: futuresMultiplePrices
+        :param individual_contracts: dictFuturesContractPrices
+        :param roll_calendar: rollCalendar
         :return: updated adjusted prices
         """
 
-        updated_adj = _update_adjusted_prices_from_multiple_no_roll(
-            self, updated_multiple_prices
+        updated_adj = _update_adjusted_prices_from_individual_contracts_no_roll(
+            self, individual_contracts, roll_calendar
         )
 
         return updated_adj
 
 
 def _panama_stitch(
-    multiple_prices_input: futuresMultiplePrices, forward_fill: bool = False
-) -> pd.Series:
+    individual_contracts: dictFuturesContractPrices,
+    roll_calendar: rollCalendar,
+) -> pd.DataFrame:
     """
     Do a panama stitch for adjusted prices
 
-    :param multiple_prices:  futuresMultiplePrices
+    :param individual_contracts:  dictFuturesContractPrices
     :return: pd.Series of adjusted prices
     """
-    multiple_prices = copy(multiple_prices_input)
-    if forward_fill:
-        multiple_prices.ffill(inplace=True)
+    individual_contracts = copy(individual_contracts)
 
-    if multiple_prices.empty:
-        raise Exception("Can't stitch an empty multiple prices object")
+    if individual_contracts.empty:
+        raise Exception("Can't stitch an empty dictFuturesContractPrices object")
 
-    previous_row = multiple_prices.iloc[0, :]
-    adjusted_prices_values = [previous_row.PRICE]
+    previous_calendar = roll_calendar.iloc[0]
+    previous_contract_prices = individual_contracts[previous_calendar.current_contract]
+    previous_row = previous_contract_prices.iloc[0:, ]
+    adjusted_prices_values = [previous_row[PRICE_DATA_COLUMNS]]
 
-    for dateindex in multiple_prices.index[1:]:
-        current_row = multiple_prices.loc[dateindex, :]
+    for dateindex in previous_contract_prices.index[1:]:
+        current_calendar = roll_calendar.reindex_like(previous_contract_prices, method='ffill').loc[dateindex, :]
+        current_contract_prices = individual_contracts[current_calendar.current_contract]
+        current_row = current_contract_prices.loc[dateindex]
 
-        if current_row.PRICE_CONTRACT == previous_row.PRICE_CONTRACT:
-            # no roll has occured
+        if current_calendar.current_contract == previous_calendar.current_contract:
+            # no roll has ocurred
             # we just append the price
-            adjusted_prices_values.append(current_row.PRICE)
+            adjusted_prices_values.append(current_row[PRICE_DATA_COLUMNS])
         else:
-            # A roll has occured
+            # A roll has occured:
             adjusted_prices_values = _roll_in_panama(
-                adjusted_prices_values, previous_row, current_row
+                adjusted_prices_values,
+                previous_calendar.current_contract,
+                previous_row,
+                current_calendar.current_contract,
+                current_row,
             )
 
+        previous_calendar = current_calendar
+        previous_contract_prices = current_contract_prices
         previous_row = current_row
 
     # it's ok to return a DataFrame since the calling object will change the
     # type
-    adjusted_prices = pd.Series(adjusted_prices_values, index=multiple_prices.index)
+    adjusted_prices = pd.DataFrame(adjusted_prices_values)
 
     return adjusted_prices
 
 
-def _roll_in_panama(adjusted_prices_values, previous_row, current_row):
+def _roll_in_panama(adjusted_prices_values, previous_contract, previous_row, current_contract, current_row):
     # This is the sort of code you will need to change to adjust the roll logic
     # The roll differential is from the previous_row
-    roll_differential = previous_row.FORWARD - previous_row.PRICE
+    roll_differential = previous_row.FINAL - previous_row.FINAL
     if np.isnan(roll_differential):
         raise Exception(
             "On this day %s which should be a roll date we don't have prices for both %s and %s contracts"
             % (
                 str(current_row.name),
-                previous_row.PRICE_CONTRACT,
-                previous_row.FORWARD_CONTRACT,
+                previous_contract,
+                current_contract,
             )
         )
 
     # We add the roll differential to all previous prices
+    volume = [row[VOLUME_COLUMN] for row in adjusted_prices_values]
     adjusted_prices_values = [
-        adj_price + roll_differential for adj_price in adjusted_prices_values
+        adj_price + roll_differential for adj_price in adjusted_prices_values[NOT_VOLUME_COLUMNS]
     ]
-
+    adjusted_prices_values = [
+        pd.concat([adjusted_prices_values[i], volume[i]], axis=1) for i in range(len(adjusted_prices_values))
+    ]
     # note this includes the price for the previous row, which will now be equal to the forward price
     # We now add todays price. This will be for the new contract
 
-    adjusted_prices_values.append(current_row.PRICE)
+    adjusted_prices_values.append(current_row[PRICE_DATA_COLUMNS])
 
     return adjusted_prices_values
 
@@ -138,30 +162,45 @@ def _roll_in_panama(adjusted_prices_values, previous_row, current_row):
 no_update_roll_has_occured = futuresAdjustedPrices.create_empty()
 
 
-def _update_adjusted_prices_from_multiple_no_roll(
+def _update_adjusted_prices_from_individual_contracts_no_roll(
     existing_adjusted_prices: futuresAdjustedPrices,
-    updated_multiple_prices: futuresMultiplePrices,
+    individual_contracts: dictFuturesContractPrices,
+    roll_calendar: rollCalendar,
 ) -> futuresAdjustedPrices:
     """
     Update adjusted prices assuming no roll has happened
 
     :param existing_adjusted_prices: futuresAdjustedPrices
-    :param updated_multiple_prices: futuresMultiplePrices
+    :param individual_contracts: dictFuturesContractPrices
+    :param roll_calendar: rollCalendar
     :return: updated adjusted prices
     """
-    new_multiple_price_data, last_contract_in_price_data = _calc_new_multiple_prices(
-        existing_adjusted_prices, updated_multiple_prices
+    last_date_in_existing_adjusted_prices = existing_adjusted_prices.index[-1]
+    last_contract_in_roll_calendar = roll_calendar.current_contract.iloc[-1]
+    try:
+        new_contract_price_data = individual_contracts[last_contract_in_roll_calendar]
+    except KeyError:
+        raise Exception(
+            "No contract named %s in dict of individual contracts" % (
+                str(last_contract_in_roll_calendar)
+            )
+        )
+
+    new_adjusted_prices = (
+        new_contract_price_data.loc[new_contract_price_data.index > last_date_in_existing_adjusted_prices]
     )
 
-    no_roll_has_occured = new_multiple_price_data.check_all_contracts_equal_to(
-        last_contract_in_price_data
+    filled_roll_calendar = roll_calendar.reindex_like(new_contract_price_data, method='ffill')
+    no_roll_has_occurred = (
+        last_contract_in_roll_calendar == filled_roll_calendar.loc[
+            filled_roll_calendar.index < last_date_in_existing_adjusted_prices
+        ].tail(1).current_contract
     )
 
-    if not no_roll_has_occured:
+    if not no_roll_has_occurred:
         return no_update_roll_has_occured
 
-    new_adjusted_prices = new_multiple_price_data[price_name]
-    new_adjusted_prices = new_adjusted_prices.dropna()
+    new_adjusted_prices.dropna(inplace=True)
 
     merged_adjusted_prices = full_merge_of_existing_series(
         existing_adjusted_prices, new_adjusted_prices
@@ -169,24 +208,3 @@ def _update_adjusted_prices_from_multiple_no_roll(
     merged_adjusted_prices = futuresAdjustedPrices(merged_adjusted_prices)
 
     return merged_adjusted_prices
-
-
-def _calc_new_multiple_prices(
-    existing_adjusted_prices: futuresAdjustedPrices,
-    updated_multiple_prices: futuresMultiplePrices,
-) -> (futuresMultiplePrices, str):
-    last_date_in_current_adj = existing_adjusted_prices.index[-1]
-    multiple_prices_as_dict = updated_multiple_prices.as_dict()
-
-    prices_in_multiple_prices = multiple_prices_as_dict[price_name]
-    price_contract_column = contract_name_from_column_name(price_name)
-
-    last_contract_in_price_data = prices_in_multiple_prices[price_contract_column][
-        :last_date_in_current_adj
-    ][-1]
-
-    new_multiple_price_data = prices_in_multiple_prices.prices_after_date(
-        last_date_in_current_adj
-    )
-
-    return new_multiple_price_data, last_contract_in_price_data

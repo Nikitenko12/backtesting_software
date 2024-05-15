@@ -198,3 +198,46 @@ def full_merge_of_existing_series(
         merged_data.update(new_series)
 
     return merged_data
+
+
+def full_merge_of_existing_dfs(
+    old_df: pd.DataFrame, new_df: pd.DataFrame, keep_older: bool = True
+) -> pd.DataFrame:
+    """
+    Merges old data with new data.
+    Any Nan in the existing data will be replaced (be careful!)
+
+    >>> import numpy as np, datetime
+    >>> old_series = pd.Series([1,np.nan,3,np.nan], pd.date_range(datetime.datetime(2000,1,1), periods=4))
+    >>> new_series = pd.Series([2,5, np.nan,8], pd.date_range(datetime.datetime(2000,1,1), periods=4))
+    >>> full_merge_of_existing_series(old_series, new_series)
+    2000-01-01    1.0
+    2000-01-02    5.0
+    2000-01-03    3.0
+    2000-01-04    8.0
+    Freq: D, Name: original, dtype: float64
+    >>> full_merge_of_existing_series(old_series, new_series, keep_older=False)
+    2000-01-01    2.0
+    2000-01-02    5.0
+    2000-01-03    3.0
+    2000-01-04    8.0
+    Freq: D, dtype: float64
+    """
+    if len(old_df) == 0:
+        return new_df
+    if len(new_df) == 0:
+        return old_df
+
+    if keep_older:
+        joint_data = pd.concat([old_df, new_df], axis=0)
+        joint_data['index'] = joint_data.index
+        joint_data.drop_duplicates('index', keep='first', inplace=True)
+        joint_data.drop(columns=['index'])
+
+        merged_data = joint_data
+    else:
+        # update older data with non-NA values from new data series
+        merged_data = old_df.copy()
+        merged_data.update(new_df)
+
+    return merged_data
