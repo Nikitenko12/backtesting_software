@@ -337,6 +337,7 @@ Frequency = Enum(
 DAILY_PRICE_FREQ = Frequency.Day
 BUSINESS_DAY_FREQ = Frequency.BDay
 HOURLY_FREQ = Frequency.Hour
+MINUTE_FREQ = Frequency.Minute
 
 MIXED_FREQ = Frequency.Mixed
 
@@ -358,6 +359,7 @@ def from_config_frequency_pandas_resample(freq: Frequency) -> str:
         Frequency.Day: "D",
         Frequency.Minutes_15: "15T",
         Frequency.Minutes_5: "5T",
+        Frequency.Minute: "T",
         Frequency.Seconds_10: "10S",
         Frequency.Second: "S",
     }
@@ -387,6 +389,7 @@ def from_frequency_to_times_per_year(freq: Frequency) -> float:
         Frequency.Day: CALENDAR_DAYS_IN_YEAR,
         Frequency.Minutes_15: (MINUTES_PER_YEAR / 15),
         Frequency.Minutes_5: (MINUTES_PER_YEAR / 5),
+        Frequency.Minute: MINUTES_PER_YEAR,
         Frequency.Seconds_10: SECONDS_IN_YEAR / 10,
         Frequency.Second: SECONDS_IN_YEAR,
     }
