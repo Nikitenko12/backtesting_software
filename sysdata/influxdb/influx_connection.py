@@ -105,7 +105,7 @@ class influxData(object):
     """
     def __init__(
         self,
-        influx_bucket_name: str = arg_not_supplied,
+        influx_bucket_name: str,
         influx_db: influxDb = None
     ):
         if influx_db is None:
@@ -140,7 +140,7 @@ class influxData(object):
                 f' |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")'
 
         print(query)
-        item = self.query_api.query_data_frame(query)
+        item = self.query_api.query_data_frame(query, org=self.org)
         return item
 
     def write(self, ident: str, data: pd.DataFrame, tags: dict = None):
@@ -156,9 +156,10 @@ class influxData(object):
         )
 
     def get_keynames(self) -> list:
-        query = f'import \"influxdata/influxdb/schema\"' \
-            f'schema.measurements(bucket: \"{self.bucket_name}\")'
-        keynames = self.query_api.query(query)
+        query = f'''import \"influxdata/influxdb/schema\"
+        
+                schema.measurements(bucket: \"{self.bucket_name}\")'''
+        keynames = self.query_api.query(query, org=self.org)[0].records
 
         return keynames
 
@@ -172,10 +173,11 @@ class influxData(object):
         keynames_and_tags = dict(keys=measurements)
 
         for measurement in measurements:
-            query = f'import \"influxdata/influxdb/schema\"' \
-                f'schema.measurementTagValues(bucket: "{self.bucket_name}", tag: "frequency", measurement: "{measurement}")'
+            query = f'''import \"influxdata/influxdb/schema\"
 
-            keynames_and_tags[measurement] = self.query_api.query(query)
+                    schema.measurementTagValues(bucket: "{self.bucket_name}", tag: "frequency", measurement: "{measurement}")'''
+
+            keynames_and_tags[measurement] = self.query_api.query(query, org=self.org)[0].records
 
         return keynames_and_tags
 
