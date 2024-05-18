@@ -46,6 +46,11 @@ mongo_port: 27017
 # Parquet store
 parquet_store: '/home/me/data/parquet'
 #
+# InfluxDB
+influx_url: 'http://localhost:8086/'
+influx_token: 'TEpaoG4xAYQRBDKEOJZ6n6lIC7YUqe2MThp8Vvsxv43IYugCcWlfItQP5QrXAH7iV00E9gA8ZD59cqIVY6OB2w=='
+influx_org: 'Astra Investments'
+#
 # Needs to be consistent with what you are using in crontab
 echo_extension: '.txt'
 # Spike checker

@@ -5,7 +5,7 @@ Read and write data from mongodb for individual futures contracts
 
 from syscore.dateutils import Frequency, MIXED_FREQ
 
-from sysdata.arctic.arctic_connection import arcticData
+from sysdata.influxdb.influx_connection import influxData
 from sysobjects.contracts import listOfFuturesContracts
 from sysdata.futures.futures_per_contract_prices import (
     futuresContractPriceData,
@@ -16,25 +16,25 @@ from syslogging.logger import *
 
 import pandas as pd
 
-CONTRACT_COLLECTION = "futures_contract_prices"
+CONTRACT_BUCKET = "futures_contract_prices"
 
 
-class arcticFuturesContractPriceData(futuresContractPriceData):
+class influxFuturesContractPriceData(futuresContractPriceData):
     """
-    Class to read / write futures price data to and from arctic
+    Class to read / write futures price data to and from influx
     """
 
-    def __init__(self, mongo_db=None, log=get_logger("arcticFuturesContractPriceData")):
+    def __init__(self, influx_db=None, log=get_logger("influxFuturesContractPriceData")):
         super().__init__(log=log)
 
-        self._arctic_connection = arcticData(CONTRACT_COLLECTION, mongo_db=mongo_db)
+        self._influx_connection = influxData(CONTRACT_BUCKET, influx_db=influx_db)
 
     def __repr__(self):
-        return repr(self._arctic_connection)
+        return repr(self._influx_connection)
 
     @property
-    def arctic_connection(self):
-        return self._arctic_connection
+    def influx_connection(self):
+        return self._influx_connection
 
     def _get_merged_prices_for_contract_object_no_checking(
         self, futures_contract_object: futuresContract
@@ -42,7 +42,7 @@ class arcticFuturesContractPriceData(futuresContractPriceData):
         """
         Read back the prices for a given contract object
 
-        :param contract_object:  futuresContract
+        :param futures_contract_object:  futuresContract
         :return: data
         """
 
@@ -61,7 +61,7 @@ class arcticFuturesContractPriceData(futuresContractPriceData):
         )
 
         # Returns a data frame which should have the right format
-        data = self.arctic_connection.read(ident)
+        data = self.influx_connection.read(ident[0], tag=("frequency", ident[1]))
 
         return futuresContractPrices(data)
 
@@ -96,7 +96,7 @@ class arcticFuturesContractPriceData(futuresContractPriceData):
         )
         futures_price_data_as_pd = pd.DataFrame(futures_price_data)
 
-        self.arctic_connection.write(ident, futures_price_data_as_pd)
+        self.influx_connection.write(ident[0], futures_price_data_as_pd, tags={"frequency": ident[1]})
 
         self.log.debug(
             "Wrote %s lines of prices for %s at %s to %s"
@@ -148,9 +148,11 @@ class arcticFuturesContractPriceData(futuresContractPriceData):
     def has_price_data_for_contract_at_frequency(
         self, contract_object: futuresContract, frequency: Frequency
     ) -> bool:
-        return self.arctic_connection.has_keyname(
-            from_contract_and_freq_to_key(contract_object, frequency=frequency)
+        ident = from_contract_and_freq_to_key(
+            contract_object, frequency=frequency
         )
+
+        return self.influx_connection.has_keyname_and_tag(ident[0], ident[1])
 
     def _get_contract_and_frequencies_with_price_data(self) -> list:
         """
@@ -158,15 +160,17 @@ class arcticFuturesContractPriceData(futuresContractPriceData):
         :return: list of futures contracts as tuples
         """
 
-        all_keynames = self._all_keynames_in_library()
+        all_keynames_and_tags = self._all_keynames_and_tags_in_library()
         list_of_contract_and_freq_tuples = [
-            from_key_to_freq_and_contract(keyname) for keyname in all_keynames
+            from_key_and_tag_to_freq_and_contract(keyname, tag)
+            for keyname in all_keynames_and_tags.keys()
+            for tag in all_keynames_and_tags[keyname]
         ]
 
         return list_of_contract_and_freq_tuples
 
-    def _all_keynames_in_library(self) -> list:
-        return self.arctic_connection.get_keynames()
+    def _all_keynames_and_tags_in_library(self) -> dict:
+        return self.influx_connection.get_keynames_and_tags()
 
     def _delete_merged_prices_for_contract_object_with_no_checks_be_careful(
         self, futures_contract_object: futuresContract
@@ -189,7 +193,7 @@ class arcticFuturesContractPriceData(futuresContractPriceData):
         ident = from_contract_and_freq_to_key(
             contract=futures_contract_object, frequency=frequency
         )
-        self.arctic_connection.delete(ident)
+        self.influx_connection.delete(ident[0], ("frequency", ident[1]))
         self.log.debug(
             "Deleted all prices for %s from %s"
             % (futures_contract_object.key, str(self)),
@@ -198,15 +202,12 @@ class arcticFuturesContractPriceData(futuresContractPriceData):
         )
 
 
-def from_key_to_freq_and_contract(keyname):
-    first_split = keyname.split("/")
-    if len(first_split) == 1:
+def from_key_and_tag_to_freq_and_contract(keyname, tag):
+    contract_str = keyname
+    if len(tag) == 1:
         frequency = MIXED_FREQ
-        contract_str = keyname
     else:
-        frequency = Frequency[first_split[0]]
-        contract_str = first_split[1]
-
+        frequency = Frequency[tag]
     contract_str_split = contract_str.split(".")
     futures_contract = futuresContract(contract_str_split[0], contract_str_split[1])
 
@@ -225,4 +226,4 @@ def from_contract_and_freq_to_key(contract: futuresContract, frequency: Frequenc
 
 
 def from_tuple_to_key(keytuple):
-    return keytuple[0] + keytuple[1] + "." + keytuple[2]
+    return keytuple[1] + "." + keytuple[2], keytuple[0]

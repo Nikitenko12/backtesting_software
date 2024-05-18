@@ -7,7 +7,6 @@ from syscore.pandas.full_merge_with_replacement import full_merge_of_existing_se
 from sysobjects.dict_of_named_futures_per_contract_prices import (
     contract_name_from_column_name,
 )
-# from sysobjects.multiple_prices import futuresMultiplePrices
 from sysobjects.futures_per_contract_prices import (
     PRICE_DATA_COLUMNS,
     FINAL_COLUMN,

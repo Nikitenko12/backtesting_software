@@ -1,3 +1,5 @@
+import datetime
+
 import pandas as pd
 from influxdb_client import InfluxDBClient
 
@@ -69,14 +71,14 @@ class InfluxClientFactory(object):
 influx_client_factory = InfluxClientFactory()
 
 
-class influxData(object):
+class influxDb:
     """
-    All of our Influx connections use this class
+    Keeps track of influx database we are connected to
 
+    But requires adding a collection with influxData before useful
     """
     def __init__(
         self,
-        influx_bucket_name,
         influx_url: str = arg_not_supplied,
         influx_token: str = arg_not_supplied,
         influx_org: str = arg_not_supplied,
@@ -94,8 +96,26 @@ class influxData(object):
         client = influx_client_factory.get_influx_client(url, token, org)
 
         self.client = client
+
+
+class influxData(object):
+    """
+    All of our Influx connections use this class
+
+    """
+    def __init__(
+        self,
+        influx_bucket_name: str = arg_not_supplied,
+        influx_db: influxDb = None
+    ):
+        if influx_db is None:
+            influx_db = influxDb()
+
+        self.org = influx_db.org
+        self.client = influx_db.client
+
         self.bucket_name = influx_bucket_name
-        self.bucket = self._setup_bucket(client, self.bucket_name)
+        self.bucket = self._setup_bucket(self.bucket_name)
 
         self.write_api = self.client.write_api()
         self.query_api = self.client.query_api()
@@ -106,15 +126,24 @@ class influxData(object):
             f"bucket {self.bucket_name}"
         )
 
-    def read(self, ident) -> pd.DataFrame:
-        query = f'from(bucket:"{self.bucket_name}")' \
-            f' |> range(start: 0, stop: now())' \
-            f' |> filter(fn: (r) => r._measurement == "{ident}")' \
-            f' |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")'
+    def read(self, ident, tag: tuple = None) -> pd.DataFrame:
+        if tag is not None:
+            query = f'from(bucket:"{self.bucket_name}")' \
+                    f' |> range(start: 0, stop: now())' \
+                    f' |> filter(fn: (r) => r._measurement == "{ident}")' \
+                    f' |> filter(fn: (r) => r.{tag[0]} == "{tag[1]}")' \
+                    f' |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")'
+        else:
+            query = f'from(bucket:"{self.bucket_name}")' \
+                f' |> range(start: 0, stop: now())' \
+                f' |> filter(fn: (r) => r._measurement == "{ident}")' \
+                f' |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")'
+
+        print(query)
         item = self.query_api.query_data_frame(query)
         return item
 
-    def write(self, ident: str, data: pd.DataFrame, tags: dict):
+    def write(self, ident: str, data: pd.DataFrame, tags: dict = None):
         df = data.copy()
         for tag in list(tags.keys()):
             df[tag] = tags[tag]
@@ -138,14 +167,41 @@ class influxData(object):
 
         return keyname in all_keynames
 
-    def delete(self, ident: str):
-        delete_api = self.client.delete_api()
-        delete_api.delete(predicate=f'_measurement="{ident}"')
+    def get_keynames_and_tags(self) -> dict:
+        measurements = self.get_keynames()
+        keynames_and_tags = dict(keys=measurements)
 
-    def _setup_bucket(self, client: InfluxDBClient, bucket_name):
-        buckets_api = client.buckets_api()
+        for measurement in measurements:
+            query = f'import \"influxdata/influxdb/schema\"' \
+                f'schema.measurementTagValues(bucket: "{self.bucket_name}", tag: "frequency", measurement: "{measurement}")'
+
+            keynames_and_tags[measurement] = self.query_api.query(query)
+
+        return keynames_and_tags
+
+    def has_keyname_and_tag(self, keyname, tag) -> bool:
+        keynames_and_tags = self.get_keynames_and_tags()
+        return tag in keynames_and_tags[keyname]
+
+    def delete(self, ident: str, tag: tuple = None):
+        predicate = f'_measurement="{ident}"'
+        if tag is not None:
+            predicate += f', {tag[0]}="{tag[1]}"'
+        delete_api = self.client.delete_api()
+        delete_api.delete(
+            bucket=self.bucket_name,
+            start=datetime.datetime.fromordinal(0),
+            stop=datetime.datetime.now(),
+            predicate=predicate
+        )
+
+    def _setup_bucket(self, bucket_name):
+        if bucket_name is arg_not_supplied:
+            return None
+
+        buckets_api = self.client.buckets_api()
         if buckets_api.find_bucket_by_name(bucket_name) is None:
-            buckets_api.create_bucket(bucket_name=bucket_name)
+            buckets_api.create_bucket(bucket_name=bucket_name, org_id=self.org)
 
         return buckets_api.find_bucket_by_name(bucket_name)
 

@@ -10,6 +10,7 @@ from sysdata.mongodb.mongo_connection import mongoDb
 from syslogging.logger import *
 from sysdata.mongodb.mongo_IB_client_id import mongoIbBrokerClientIdData
 from sysdata.parquet.parquet_access import ParquetAccess
+from sysdata.influxdb.influx_connection import influxDb
 
 
 class dataBlob(object):
@@ -21,6 +22,7 @@ class dataBlob(object):
         parquet_store_path: str = arg_not_supplied,
         ib_conn: connectionIB = arg_not_supplied,
         mongo_db: mongoDb = arg_not_supplied,
+        influx_db: influxDb = arg_not_supplied,
         log=arg_not_supplied,
         keep_original_prefix: bool = False,
     ):
@@ -28,7 +30,7 @@ class dataBlob(object):
         Set up of a data pipeline with standard attribute names, logging, links to DB etc
 
         Class names we know how to handle are:
-        'ib*', 'mongo*', 'arctic*', 'csv*'
+        'ib*', 'mongo*', 'arctic*', 'csv*' influx*
 
             data = dataBlob([arcticFuturesContractPriceData, arcticFuturesContractPriceData, mongoFuturesContractData])
 
@@ -56,6 +58,7 @@ class dataBlob(object):
 
         """
 
+        self._influx_db = influx_db
         self._mongo_db = mongo_db
         self._ib_conn = ib_conn
         self._log = log
@@ -104,6 +107,7 @@ class dataBlob(object):
             arctic=self._add_arctic_class,
             mongo=self._add_mongo_class,
             parquet=self._add_parquet_class,
+            influx=self._add_influx_class,
         )
 
         method_to_add_with = class_dict.get(prefix, None)
@@ -132,6 +136,22 @@ class dataBlob(object):
                 "Error %s couldn't evaluate %s(self.ib_conn, self) This might be because (a) IB gateway not running, or (b) import is missing\
                          or (c) arguments don't follow pattern"
                 % (str(e), class_name)
+            )
+            self._raise_and_log_error(msg)
+
+        return resolved_instance
+
+    def _add_influx_class(self, class_object):
+        log = self._get_specific_logger(class_object)
+        try:
+            resolved_instance = class_object(influx_db=self.influx_db, log=log)
+        except Exception as e:
+            class_name = get_class_name(class_object)
+            msg = (
+                    "Error '%s' couldn't evaluate %s(influx_db=self.influx_db) \
+                            This might be because import is missing\
+                             or arguments don't follow pattern"
+                    % (str(e), class_name)
             )
             self._raise_and_log_error(msg)
 
@@ -319,6 +339,15 @@ class dataBlob(object):
         return int(client_id)
 
     @property
+    def influx_db(self) -> influxDb:
+        influx_db = getattr(self, "_influx_db", arg_not_supplied)
+        if influx_db is arg_not_supplied:
+            influx_db = self._get_new_influx_db()
+            self._influx_db = influx_db
+
+        return influx_db
+
+    @property
     def mongo_db(self) -> mongoDb:
         mongo_db = getattr(self, "_mongo_db", arg_not_supplied)
         if mongo_db is arg_not_supplied:
@@ -341,6 +370,11 @@ class dataBlob(object):
                 raise Exception("Need to define parquet_store in config to use parquet")
 
         return path
+
+    def _get_new_influx_db(self) -> influxDb:
+        influx_db = influxDb()
+
+        return influx_db
 
     def _get_new_mongo_db(self) -> mongoDb:
         mongo_db = mongoDb()
@@ -374,7 +408,7 @@ class dataBlob(object):
         return log_name
 
 
-source_dict = dict(arctic="db", mongo="db", csv="db", parquet="db", ib="broker")
+source_dict = dict(arctic="db", mongo="db", csv="db", parquet="db", ib="broker", influx="db")
 
 
 def get_parquet_root_directory(config):

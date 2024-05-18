@@ -9,7 +9,6 @@ from sysobjects.instruments import (
     instrumentCosts,
     futuresInstrumentWithMetaData,
 )
-from sysobjects.multiple_prices import futuresMultiplePrices
 from sysobjects.dict_of_named_futures_per_contract_prices import (
     price_name,
     carry_name,
@@ -79,49 +78,6 @@ class futuresSimData(simData):
             raise Exception("Instrument code %s has no data!" % instrument_code)
 
         return price[start_date:]
-
-    def get_instrument_raw_carry_data(self, instrument_code: str) -> pd.DataFrame:
-        """
-        Returns a pd. dataframe with the 4 columns PRICE, CARRY, PRICE_CONTRACT, CARRY_CONTRACT
-
-        These are specifically needed for futures trading
-
-        We'd inherit from this method for a specific data source
-
-        :param instrument_code: instrument to get carry data for
-        :type instrument_code: str
-
-        :returns: pd.DataFrame
-
-        """
-
-        all_price_data = self.get_multiple_prices(instrument_code)
-        carry_data = all_price_data[
-            [price_name, carry_name, price_contract_name, carry_contract_name]
-        ]
-
-        return carry_data
-
-    def get_current_and_forward_price_data(self, instrument_code: str) -> pd.DataFrame:
-        """
-        Returns a pd. dataframe with the 4 columns PRICE, PRICE_CONTRACT, FORWARD_, FORWARD_CONTRACT
-
-        These are required if we want to backadjust from scratch
-
-        We'd inherit from this method for a specific data source
-
-        :param instrument_code: instrument to get carry data for
-        :type instrument_code: str
-
-        :returns: pd.DataFrame
-
-        """
-
-        all_price_data = self.get_multiple_prices(instrument_code)
-
-        return all_price_data[
-            [price_name, forward_name, price_contract_name, forward_contract_name]
-        ]
 
     def get_rolls_per_year(self, instrument_code: str) -> int:
         roll_parameters = self.get_roll_parameters(instrument_code)
@@ -219,18 +175,6 @@ class futuresSimData(simData):
         :return:
         """
 
-        raise NotImplementedError()
-
-    def get_multiple_prices(self, instrument_code: str) -> futuresMultiplePrices:
-        start_date = self.start_date_for_data()
-
-        return self.get_multiple_prices_from_start_date(
-            instrument_code, start_date=start_date
-        )
-
-    def get_multiple_prices_from_start_date(
-        self, instrument_code: str, start_date
-    ) -> futuresMultiplePrices:
         raise NotImplementedError()
 
     def get_instrument_meta_data(

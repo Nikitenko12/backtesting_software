@@ -3,7 +3,6 @@ from sysdata.sim.futures_sim_data import futuresSimData
 from sysdata.futures.adjusted_prices import futuresAdjustedPricesData
 from sysdata.fx.spotfx import fxPricesData
 from sysdata.futures.instruments import futuresInstrumentData
-from sysdata.futures.multiple_prices import futuresMultiplePricesData
 from sysdata.futures.rolls_parameters import rollParametersData
 from sysdata.futures.spread_costs import spreadCostData
 from sysdata.data_blob import dataBlob
@@ -16,7 +15,6 @@ from sysobjects.instruments import (
 from syscore.exceptions import missingData
 from sysobjects.spot_fx_prices import fxPrices
 from sysobjects.adjusted_prices import futuresAdjustedPrices
-from sysobjects.multiple_prices import futuresMultiplePrices
 from sysobjects.rolls import rollParameters
 
 
@@ -67,18 +65,6 @@ class genericBlobUsingFuturesSimData(futuresSimData):
 
         return data
 
-    def get_multiple_prices_from_start_date(
-        self, instrument_code: str, start_date
-    ) -> futuresMultiplePrices:
-        data = self.db_futures_multiple_prices_data.get_multiple_prices(instrument_code)
-        if len(data) == 0:
-            raise missingData(
-                "Data for %s not found! Remove from instrument list, or add to config.ignore_instruments"
-                % instrument_code
-            )
-
-        return data[start_date:]
-
     def get_instrument_meta_data(
         self, instrument_code: str
     ) -> futuresInstrumentWithMetaData:
@@ -117,10 +103,6 @@ class genericBlobUsingFuturesSimData(futuresSimData):
     @property
     def db_futures_instrument_data(self) -> futuresInstrumentData:
         return self.data.db_futures_instrument
-
-    @property
-    def db_futures_multiple_prices_data(self) -> futuresMultiplePricesData:
-        return self.data.db_futures_multiple_prices
 
     @property
     def db_roll_parameters(self) -> rollParametersData:

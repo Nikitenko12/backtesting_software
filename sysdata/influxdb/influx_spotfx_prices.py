@@ -1,40 +1,40 @@
 from sysdata.fx.spotfx import fxPricesData
 from sysobjects.spot_fx_prices import fxPrices
-from sysdata.arctic.arctic_connection import arcticData
+from sysdata.influxdb.influx_connection import influxData
 from syslogging.logger import *
 import pandas as pd
 
-SPOTFX_COLLECTION = "spotfx_prices"
+SPOTFX_BUCKET = "spotfx_prices"
 
 
-class arcticFxPricesData(fxPricesData):
+class influxFxPricesData(fxPricesData):
     """
     Class to read / write fx prices
     """
 
-    def __init__(self, mongo_db=None, log=get_logger("arcticFxPricesData")):
+    def __init__(self, influx_db=None, log=get_logger("influxFxPricesData")):
         super().__init__(log=log)
-        self._arctic = arcticData(SPOTFX_COLLECTION, mongo_db=mongo_db)
+        self._influx = influxData(SPOTFX_BUCKET, influx_db=influx_db)
 
     @property
-    def arctic(self):
-        return self._arctic
+    def influx(self):
+        return self._influx
 
     def __repr__(self):
-        return repr(self._arctic)
+        return repr(self._influx)
 
     def get_list_of_fxcodes(self) -> list:
-        return self.arctic.get_keynames()
+        return self.influx.get_keynames()
 
     def _get_fx_prices_without_checking(self, currency_code: str) -> fxPrices:
-        fx_data = self.arctic.read(currency_code)
+        fx_data = self.influx.read(currency_code)
 
         fx_prices = fxPrices(fx_data[fx_data.columns[0]])
 
         return fx_prices
 
     def _delete_fx_prices_without_any_warning_be_careful(self, currency_code: str):
-        self.arctic.delete(currency_code)
+        self.influx.delete(currency_code)
         self.log.debug(
             "Deleted fX prices for %s from %s" % (currency_code, str(self)),
             **{CURRENCY_CODE_LOG_LABEL: currency_code, "method": "temp"},
@@ -47,7 +47,7 @@ class arcticFxPricesData(fxPricesData):
         fx_price_data_aspd.columns = ["price"]
         fx_price_data_aspd = fx_price_data_aspd.astype(float)
 
-        self.arctic.write(currency_code, fx_price_data_aspd)
+        self.influx.write(currency_code, fx_price_data_aspd)
         self.log.debug(
             "Wrote %s lines of prices for %s to %s"
             % (len(fx_price_data), currency_code, str(self)),

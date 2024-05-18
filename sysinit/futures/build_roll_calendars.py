@@ -9,7 +9,6 @@ from sysobjects.contract_dates_and_expiries import contractDate
 from sysobjects.dict_of_futures_per_contract_prices import (
     dictFuturesContractFinalPrices,
 )
-from sysobjects.multiple_prices import futuresMultiplePrices
 from sysobjects.roll_parameters_with_price_data import (
     find_earliest_held_contract_with_price_data,
     contractWithRollParametersAndPrices,
@@ -568,85 +567,6 @@ def _add_carry_calendar(
     roll_calendar["carry_contract"] = carry_contract_dates
 
     return roll_calendar
-
-
-def back_out_roll_calendar_from_multiple_prices(
-    multiple_prices: futuresMultiplePrices,
-) -> pd.DataFrame:
-    multiple_prices_unique = multiple_prices[
-        ~multiple_prices.index.duplicated(keep="last")
-    ]
-
-    roll_calendar = _get_roll_calendar_from_unique_prices(multiple_prices_unique)
-
-    roll_calendar = _add_extra_row_to_implied_roll_calendar(
-        roll_calendar, multiple_prices_unique
-    )
-
-    return roll_calendar
-
-
-def _get_roll_calendar_from_unique_prices(
-    multiple_prices_unique: pd.DataFrame,
-) -> pd.DataFrame:
-    tuple_of_roll_dates = _get_time_indices_from_multiple_prices(multiple_prices_unique)
-    roll_calendar = _get_roll_calendar_from_roll_dates_and_unique_prices(
-        multiple_prices_unique, tuple_of_roll_dates
-    )
-
-    return roll_calendar
-
-
-def _get_time_indices_from_multiple_prices(
-    multiple_prices_unique: pd.DataFrame,
-) -> tuple:
-    roll_dates = multiple_prices_unique.index[1:][
-        multiple_prices_unique[1:].PRICE_CONTRACT.values
-        > multiple_prices_unique[:-1].PRICE_CONTRACT.values
-    ]
-    days_before = multiple_prices_unique.index[:-1][
-        multiple_prices_unique[:-1].PRICE_CONTRACT.values
-        < multiple_prices_unique[1:].PRICE_CONTRACT.values
-    ]
-
-    return roll_dates, days_before
-
-
-def _get_roll_calendar_from_roll_dates_and_unique_prices(
-    multiple_prices_unique: pd.DataFrame, tuple_of_roll_dates: tuple
-) -> pd.DataFrame:
-    roll_dates, days_before = tuple_of_roll_dates
-
-    current_contracts = _extract_contract_from_multiple_prices(
-        days_before, multiple_prices_unique, "PRICE_CONTRACT"
-    )
-    next_contracts = _extract_contract_from_multiple_prices(
-        roll_dates, multiple_prices_unique, "PRICE_CONTRACT"
-    )
-    carry_contracts = _extract_contract_from_multiple_prices(
-        days_before, multiple_prices_unique, "CARRY_CONTRACT"
-    )
-
-    roll_calendar = pd.DataFrame(
-        dict(
-            current_contract=current_contracts,
-            next_contract=next_contracts,
-            carry_contract=carry_contracts,
-        ),
-        index=roll_dates,
-    )
-
-    return roll_calendar
-
-
-def _extract_contract_from_multiple_prices(
-    index_of_dates: list, multiple_prices_unique: pd.DataFrame, column_name: str
-) -> list:
-    results = [
-        _float_to_contract_str(multiple_prices_unique, date_index, column_name)
-        for date_index in index_of_dates
-    ]
-    return results
 
 
 def _float_to_contract_str(multiple_prices_unique, date_index, column_name):

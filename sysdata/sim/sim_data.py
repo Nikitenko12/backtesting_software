@@ -95,28 +95,28 @@ class simData(baseData):
         # included for user API computability with SystemStage
         return get_methods(self)
 
-    def daily_prices(self, instrument_code: str) -> pd.Series:
+    def daily_prices(self, instrument_code: str) -> pd.DataFrame:
         """
         Gets daily prices
 
         :param instrument_code: Instrument to get prices for
         :type trading_rules: str
 
-        :returns: Tx1 pd.Series
+        :returns: Tx1 pd.DataFrame
 
         """
         return self._get_daily_prices_for_directional_instrument(instrument_code)
 
     def _get_daily_prices_for_directional_instrument(
         self, instrument_code: str
-    ) -> pd.Series:
+    ) -> pd.DataFrame:
         """
         Gets daily prices
 
         :param instrument_code: Instrument to get prices for
         :type trading_rules: str
 
-        :returns: Tx1 pd.Series
+        :returns: Tx1 pd.DataFrame
 
         """
         instrprice = self.get_raw_price(instrument_code)
@@ -126,12 +126,15 @@ class simData(baseData):
 
         return dailyprice
 
-    def hourly_prices(self, instrument_code: str) -> pd.Series:
+    def hourly_prices(self, instrument_code: str) -> pd.DataFrame:
         return self._get_hourly_prices_for_directional_instrument(instrument_code)
+
+    def minute_prices(self, instrument_code: str) -> pd.DataFrame:
+        return self._get_minute_prices_for_directional_instrument(instrument_code)
 
     def _get_hourly_prices_for_directional_instrument(
         self, instrument_code: str
-    ) -> pd.Series:
+    ) -> pd.DataFrame:
         instrprice = self.get_raw_price(instrument_code)
         if len(instrprice) == 0:
             raise Exception("No adjusted hourly prices for %s" % instrument_code)
@@ -140,6 +143,18 @@ class simData(baseData):
         hourly_prices = get_intraday_pdf_at_frequency(instrprice)
 
         return hourly_prices
+
+    def _get_minute_prices_for_directional_instrument(
+        self, instrument_code: str
+    ) -> pd.DataFrame:
+        instrprice = self.get_raw_price(instrument_code)
+        if len(instrprice) == 0:
+            raise Exception("No adjusted minute prices for %s" % instrument_code)
+
+        # ignore type warning - series or data frame both work
+        minute_prices = get_intraday_pdf_at_frequency(instrprice, frequency="M")
+
+        return minute_prices
 
     def get_fx_for_instrument(
         self, instrument_code: str, base_currency: str
@@ -170,7 +185,7 @@ class simData(baseData):
 
         return fx_rate_series
 
-    def get_raw_price(self, instrument_code: str) -> pd.Series:
+    def get_raw_price(self, instrument_code: str) -> pd.DataFrame:
         """
         Default method to get instrument price at 'natural' frequency
 
@@ -179,7 +194,7 @@ class simData(baseData):
         :param instrument_code: instrument to get prices for
         :type instrument_code: str
 
-        :returns: pd.Series
+        :returns: pd.DataFrame
 
         """
         start_date = self.start_date_for_data()
@@ -190,7 +205,7 @@ class simData(baseData):
 
     def get_raw_price_from_start_date(
         self, instrument_code: str, start_date: datetime.datetime
-    ) -> pd.Series:
+    ) -> pd.DataFrame:
         """
         Default method to get instrument price at 'natural' frequency
 
@@ -199,7 +214,7 @@ class simData(baseData):
         :param instrument_code: instrument to get prices for
         :type instrument_code: str
 
-        :returns: pd.Series
+        :returns: pd.DataFrame
 
         """
         raise NotImplementedError("Need to inherit from simData")
