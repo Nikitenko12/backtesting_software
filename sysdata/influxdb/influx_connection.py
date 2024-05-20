@@ -6,6 +6,7 @@ from influxdb_client.client.write_api import SYNCHRONOUS
 
 from syscore.constants import arg_not_supplied
 from sysdata.config.production_config import get_production_config
+from sysobjects.futures_per_contract_prices import PRICE_DATA_COLUMNS
 
 """
 
@@ -141,7 +142,7 @@ class influxData(object):
                 f' |> filter(fn: (r) => r._measurement == "{ident}")' \
                 f' |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")'
 
-        item = self.query_api.query_data_frame(query, org=self.org)
+        item = self.query_api.query_data_frame(query, org=self.org)[PRICE_DATA_COLUMNS]
         if isinstance(item, list):
             item = item[0]
 
