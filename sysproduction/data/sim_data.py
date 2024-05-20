@@ -6,7 +6,6 @@ from sysdata.data_blob import dataBlob
 from sysproduction.data.production_data_objects import (
     get_class_for_data_type,
     FUTURES_ADJUSTED_PRICE_DATA,
-    FUTURES_MULTIPLE_PRICE_DATA,
     FX_DATA,
     STORED_SPREAD_DATA,
     FUTURES_INSTRUMENT_DATA,
@@ -22,7 +21,6 @@ def get_sim_data_object_for_production(data=arg_not_supplied) -> dbFuturesSimDat
     data.add_class_list(
         [
             get_class_for_data_type(FUTURES_ADJUSTED_PRICE_DATA),
-            get_class_for_data_type(FUTURES_MULTIPLE_PRICE_DATA),
             get_class_for_data_type(FX_DATA),
             get_class_for_data_type(STORED_SPREAD_DATA),
             get_class_for_data_type(FUTURES_INSTRUMENT_DATA),

@@ -2,6 +2,7 @@ import datetime
 
 import pandas as pd
 from influxdb_client import InfluxDBClient
+from influxdb_client.client.write_api import SYNCHRONOUS
 
 from syscore.constants import arg_not_supplied
 from sysdata.config.production_config import get_production_config
@@ -111,13 +112,14 @@ class influxData(object):
         if influx_db is None:
             influx_db = influxDb()
 
+        self.url = influx_db.url
         self.org = influx_db.org
         self.client = influx_db.client
 
         self.bucket_name = influx_bucket_name
         self.bucket = self._setup_bucket(self.bucket_name)
 
-        self.write_api = self.client.write_api()
+        self.write_api = self.client.write_api(write_options=SYNCHRONOUS)
         self.query_api = self.client.query_api()
 
     def __repr__(self):
@@ -139,8 +141,10 @@ class influxData(object):
                 f' |> filter(fn: (r) => r._measurement == "{ident}")' \
                 f' |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")'
 
-        print(query)
         item = self.query_api.query_data_frame(query, org=self.org)
+        if isinstance(item, list):
+            item = item[0]
+
         return item
 
     def write(self, ident: str, data: pd.DataFrame, tags: dict = None):
@@ -149,10 +153,11 @@ class influxData(object):
             df[tag] = tags[tag]
 
         self.write_api.write(
-            bucket=self.bucket,
+            bucket=self.bucket_name,
+            org=self.org,
             record=df,
             data_frame_measurement_name=ident,
-            data_frame_tag_columns=[list(tags.keys())],
+            data_frame_tag_columns=list(tags.keys()),
         )
 
     def get_keynames(self) -> list:
@@ -170,14 +175,16 @@ class influxData(object):
 
     def get_keynames_and_tags(self) -> dict:
         measurements = self.get_keynames()
-        keynames_and_tags = dict(keys=measurements)
+        measurements = [x.values['_value'] for x in measurements]
+        keynames_and_tags = dict()
 
         for measurement in measurements:
             query = f'''import \"influxdata/influxdb/schema\"
 
                     schema.measurementTagValues(bucket: "{self.bucket_name}", tag: "frequency", measurement: "{measurement}")'''
 
-            keynames_and_tags[measurement] = self.query_api.query(query, org=self.org)[0].records
+            these_tags = self.query_api.query(query, org=self.org)[0].records
+            keynames_and_tags[measurement] = [x.values['_value'] for x in these_tags]
 
         return keynames_and_tags
 

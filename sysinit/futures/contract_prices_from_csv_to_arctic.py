@@ -1,5 +1,5 @@
 from syscore.constants import arg_not_supplied
-from syscore.dateutils import MIXED_FREQ, HOURLY_FREQ, DAILY_PRICE_FREQ
+from syscore.dateutils import MIXED_FREQ, HOURLY_FREQ, DAILY_PRICE_FREQ, MINUTE_FREQ
 from syscore.pandas.frequency import merge_data_with_different_freq
 from sysdata.csv.csv_futures_contract_prices import csvFuturesContractPriceData
 from sysproduction.data.prices import diagPrices
@@ -13,7 +13,7 @@ def init_db_with_csv_futures_contract_prices(
     csv_config=arg_not_supplied,
     frequency=MIXED_FREQ,
 ):
-    csv_prices = csvFuturesContractPriceData(datapath)
+    csv_prices = csvFuturesContractPriceData(datapath, config=csv_config)
     input(
         "WARNING THIS WILL ERASE ANY EXISTING DATABASE PRICES WITH DATA FROM %s ARE YOU SURE?! (CTRL-C TO STOP)"
         % csv_prices.datapath
@@ -74,14 +74,16 @@ def create_merged_prices(contract):
     db_prices = diag_prices.db_futures_contract_price_data
     if db_prices.has_price_data_for_contract_at_frequency(
         contract, DAILY_PRICE_FREQ
-    ) and db_prices.has_price_data_for_contract_at_frequency(contract, HOURLY_FREQ):
-        print(f"DB has hourly and daily prices for {contract}, creating merged prices")
+    ) and (
+        db_prices.has_price_data_for_contract_at_frequency(contract, HOURLY_FREQ)
+    ) and db_prices.has_price_data_for_contract_at_frequency(contract, MINUTE_FREQ):
+        print(f"DB has minute, hourly and daily prices for {contract}, creating merged prices")
         list_of_data = [
             diag_prices.get_prices_at_frequency_for_contract_object(
                 contract,
                 frequency=frequency,
             )
-            for frequency in [HOURLY_FREQ, DAILY_PRICE_FREQ]
+            for frequency in [MINUTE_FREQ, HOURLY_FREQ, DAILY_PRICE_FREQ]
         ]
         merged_prices = merge_data_with_different_freq(list_of_data)
         print("Writing to db")

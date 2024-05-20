@@ -14,18 +14,15 @@ from sysobjects.dict_of_futures_per_contract_prices import (
 from sysobjects.spreads import spreadsForInstrument
 
 from sysobjects.futures_per_contract_prices import futuresContractPrices
-from sysobjects.multiple_prices import futuresMultiplePrices
 from sysobjects.adjusted_prices import futuresAdjustedPrices
 
 from sysdata.futures.spreads import spreadsForInstrumentData
 
-from sysdata.futures.multiple_prices import futuresMultiplePricesData
 from sysdata.futures.adjusted_prices import futuresAdjustedPricesData
 from sysdata.futures.futures_per_contract_prices import futuresContractPriceData
 
 from sysdata.data_blob import dataBlob
 
-from sysobjects.multiple_prices import price_name
 from sysobjects.contract_dates_and_expiries import listOfContractDateStr
 from sysproduction.data.currency_data import dataCurrency
 from sysproduction.data.config import get_list_of_stale_instruments
@@ -39,7 +36,6 @@ from sysproduction.data.production_data_objects import (
     get_class_for_data_type,
     FUTURES_CONTRACT_PRICE_DATA,
     FUTURES_ADJUSTED_PRICE_DATA,
-    FUTURES_MULTIPLE_PRICE_DATA,
     FUTURES_CONTRACT_DATA,
     HISTORIC_SPREAD_DATA,
 )
@@ -55,7 +51,6 @@ class diagPrices(productionDataLayerGeneric):
                 get_class_for_data_type(FUTURES_ADJUSTED_PRICE_DATA),
                 get_class_for_data_type(FUTURES_CONTRACT_DATA),
                 get_class_for_data_type(HISTORIC_SPREAD_DATA),
-                get_class_for_data_type(FUTURES_MULTIPLE_PRICE_DATA),
             ]
         )
         return data
@@ -95,13 +90,6 @@ class diagPrices(productionDataLayerGeneric):
 
         return list_of_instruments
 
-    def get_multiple_prices(self, instrument_code: str) -> futuresMultiplePrices:
-        multiple_prices = self.db_futures_multiple_prices_data.get_multiple_prices(
-            instrument_code
-        )
-
-        return multiple_prices
-
     def get_merged_prices_for_contract_object(
         self, contract_object: futuresContract
     ) -> futuresContractPrices:
@@ -121,14 +109,6 @@ class diagPrices(productionDataLayerGeneric):
         )
 
         return prices
-
-    def get_current_priced_contract_prices_for_instrument(
-        self, instrument_code: str
-    ) -> futuresContractPrices:
-        multiple_prices = self.get_multiple_prices(instrument_code)
-        current_priced_contract_prices = multiple_prices[price_name]
-
-        return current_priced_contract_prices
 
     def get_list_of_instruments_with_contract_prices(
         self, ignore_stale: bool = True
@@ -230,10 +210,6 @@ class diagPrices(productionDataLayerGeneric):
         return self.data.db_futures_adjusted_prices
 
     @property
-    def db_futures_multiple_prices_data(self) -> futuresMultiplePricesData:
-        return self.data.db_futures_multiple_prices
-
-    @property
     def db_futures_contract_price_data(self) -> futuresContractPriceData:
         return self.data.db_futures_contract_price
 
@@ -247,7 +223,6 @@ class updatePrices(productionDataLayerGeneric):
         data.add_class_list(
             [
                 get_class_for_data_type(FUTURES_CONTRACT_PRICE_DATA),
-                get_class_for_data_type(FUTURES_MULTIPLE_PRICE_DATA),
                 get_class_for_data_type(FUTURES_CONTRACT_DATA),
                 get_class_for_data_type(FUTURES_ADJUSTED_PRICE_DATA),
                 get_class_for_data_type(HISTORIC_SPREAD_DATA),
@@ -296,18 +271,6 @@ class updatePrices(productionDataLayerGeneric):
             )
         )
         return error_or_rows_added
-
-    def add_multiple_prices(
-        self,
-        instrument_code: str,
-        updated_multiple_prices: futuresMultiplePrices,
-        ignore_duplication=True,
-    ):
-        self.db_futures_multiple_prices_data.add_multiple_prices(
-            instrument_code,
-            updated_multiple_prices,
-            ignore_duplication=ignore_duplication,
-        )
 
     def add_adjusted_prices(
         self,
@@ -358,10 +321,6 @@ class updatePrices(productionDataLayerGeneric):
     @property
     def db_futures_adjusted_prices_data(self) -> futuresAdjustedPricesData:
         return self.data.db_futures_adjusted_prices
-
-    @property
-    def db_futures_multiple_prices_data(self) -> futuresMultiplePricesData:
-        return self.data.db_futures_multiple_prices
 
     @property
     def db_futures_contract_price_data(self) -> futuresContractPriceData:

@@ -1,17 +1,17 @@
-from sysdata.parquet.parquet_adjusted_prices import parquetFuturesAdjustedPricesData
-from sysdata.parquet.parquet_capital import parquetCapitalData
-from sysdata.parquet.parquet_futures_per_contract_prices import (
-    parquetFuturesContractPriceData,
+
+from sysdata.influxdb.influx_adjusted_prices import influxFuturesAdjustedPricesData
+from sysdata.influxdb.influx_capital import influxCapitalData
+from sysdata.influxdb.influx_futures_per_contract_prices import (
+    influxFuturesContractPriceData,
 )
-from sysdata.parquet.parquet_multiple_prices import parquetFuturesMultiplePricesData
-from sysdata.parquet.parquet_spotfx_prices import parquetFxPricesData
-from sysdata.parquet.parquet_spreads import parquetSpreadsForInstrumentData
-from sysdata.parquet.parquet_optimal_positions import parquetOptimalPositionData
-from sysdata.parquet.parquet_historic_strategy_positions import (
-    parquetStrategyPositionData,
+from sysdata.influxdb.influx_spotfx_prices import influxFxPricesData
+from sysdata.influxdb.influx_spreads import influxSpreadsForInstrumentData
+from sysdata.influxdb.influx_optimal_positions import influxOptimalPositionData
+from sysdata.influxdb.influx_historic_strategy_positions import (
+    influxStrategyPositionData,
 )
-from sysdata.parquet.parquet_historic_contract_positions import (
-    parquetContractPositionData,
+from sysdata.influxdb.influx_historic_contract_positions import (
+    influxContractPositionData,
 )
 
 """
@@ -46,7 +46,6 @@ from sysdata.csv.csv_instrument_data import csvFuturesInstrumentData
 from sysdata.csv.csv_roll_parameters import csvRollParametersData
 
 FUTURES_CONTRACT_PRICE_DATA = "futures_contract_price_data"
-FUTURES_MULTIPLE_PRICE_DATA = "futures_multiple_price_data"
 FUTURES_ADJUSTED_PRICE_DATA = "futures_adjusted_price_data"
 CAPITAL_DATA = "capital_data"
 CONTRACT_POSITION_DATA = "contract_position_data"
@@ -68,19 +67,18 @@ BROKER_HISTORIC_ORDERS_DATA = "broker_historic_orders_data"
 ROLL_STATE_DATA = "roll_state_data"
 
 use_production_classes = {
-    FX_DATA: parquetFxPricesData,
+    FX_DATA: influxFxPricesData,
     ROLL_PARAMETERS_DATA: csvRollParametersData,
     FUTURES_INSTRUMENT_DATA: csvFuturesInstrumentData,
     FUTURES_CONTRACT_DATA: mongoFuturesContractData,
     STORED_SPREAD_DATA: mongoSpreadCostData,
-    FUTURES_CONTRACT_PRICE_DATA: parquetFuturesContractPriceData,
-    FUTURES_MULTIPLE_PRICE_DATA: parquetFuturesMultiplePricesData,
-    FUTURES_ADJUSTED_PRICE_DATA: parquetFuturesAdjustedPricesData,
-    CAPITAL_DATA: parquetCapitalData,
-    CONTRACT_POSITION_DATA: parquetContractPositionData,
-    STRATEGY_POSITION_DATA: parquetStrategyPositionData,
-    OPTIMAL_POSITION_DATA: parquetOptimalPositionData,
-    HISTORIC_SPREAD_DATA: parquetSpreadsForInstrumentData,
+    FUTURES_CONTRACT_PRICE_DATA: influxFuturesContractPriceData,
+    FUTURES_ADJUSTED_PRICE_DATA: influxFuturesAdjustedPricesData,
+    CAPITAL_DATA: influxCapitalData,
+    CONTRACT_POSITION_DATA: influxContractPositionData,
+    STRATEGY_POSITION_DATA: influxStrategyPositionData,
+    OPTIMAL_POSITION_DATA: influxOptimalPositionData,
+    HISTORIC_SPREAD_DATA: influxSpreadsForInstrumentData,
     STRATEGY_HISTORIC_ORDERS_DATA: mongoStrategyHistoricOrdersData,
     CONTRACT_HISTORIC_ORDERS_DATA: mongoContractHistoricOrdersData,
     BROKER_HISTORIC_ORDERS_DATA: mongoBrokerHistoricOrdersData,
