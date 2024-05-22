@@ -239,7 +239,7 @@ class csvFuturesContractPriceData(futuresContractPriceData):
         :param keyname: str
         :return: tuple instrument_code, contract_date
         """
-        if keyname.startswith("Day") or keyname.startswith("Hour"):
+        if keyname.startswith("Day") or keyname.startswith("Hour") or keyname.startswith("Minute"):
             ## has frequency
             index = keyname.find("_")
             frequency = Frequency[keyname[:index]]
