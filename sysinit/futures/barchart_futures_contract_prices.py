@@ -123,4 +123,4 @@ if __name__ == "__main__":
     input("Will overwrite existing prices are you sure?! CTL-C to abort")
     # modify flags as required
     datapath = "sysinit.futures.bcutils.data"
-    transfer_barchart_prices_to_arctic(datapath, [MINUTE_FREQ])
+    transfer_barchart_prices_to_arctic(datapath, [DAILY_PRICE_FREQ, HOURLY_FREQ, MINUTE_FREQ])

@@ -24,6 +24,8 @@ from syscore.fileutils import get_resolved_pathname
 
 logger = logging.getLogger(__name__)
 
+MINUTES_IN_DAY = 24 * 60
+
 
 class HistoricalDataResult(enum.Enum):
     NONE = 1
@@ -87,7 +89,7 @@ def create_bc_session(config_obj: dict, do_login=True):
     session = requests.Session()
     session.headers.update({"User-Agent": "Mozilla/5.0"})
     if do_login is True and (
-        "barchart_username" not in config_obj or "barchart_password" not in config_obj
+            "barchart_username" not in config_obj or "barchart_password" not in config_obj
     ):
         raise BCException("Missing credentials")
 
@@ -117,12 +119,12 @@ def create_bc_session(config_obj: dict, do_login=True):
 
 
 def save_prices_for_contract(
-    session: requests.Session,
-    contract: str,
-    save_path: str,
-    start_date: datetime,
-    end_date: datetime,
-    dry_run: bool = False,
+        session: requests.Session,
+        contract: str,
+        save_path: str,
+        start_date: datetime,
+        end_date: datetime,
+        dry_run: bool = False,
 ):
     """
     Save prices for an individual futures contract.
@@ -146,9 +148,23 @@ def save_prices_for_contract(
         if os.path.isfile(save_path):
             logger.info(
                 f"{res.adj} data for contract '{contract}' already downloaded "
-                f"({save_path}) - skipping\n"
+                f"({save_path}) - checking for start and end dates or skipping, depending on resolution\n"
             )
-            return HistoricalDataResult.EXISTS
+
+            if res == Resolution.Minute:
+                already_downloaded_prices = pd.read_csv(save_path, index_col=[0], parse_dates=True)
+                if pd.DatetimeIndex([start_date]).tz_localize(tz="US/Central").tz_convert(
+                    "UTC"
+                )[0] < already_downloaded_prices.index[0] or already_downloaded_prices.index[-1] < (
+                    pd.DatetimeIndex([end_date]).tz_localize(tz="US/Central").tz_convert(
+                        "UTC"
+                    )[0]
+                ):
+                    pass
+                else:
+                    return HistoricalDataResult.EXISTS
+            else:
+                return HistoricalDataResult.EXISTS
 
         if _insufficient_data(session, contract, res):
             logger.info(f"Insufficient {res.adj} data for '{contract}' - skipping\n")
@@ -217,7 +233,7 @@ def save_prices_for_contract(
                 "fileName": contract + "_Daily_Historical Data",
                 "symbol": contract,
                 "fields": "tradeTime.format(Y-m-d),openPrice,highPrice,lowPrice,"
-                "lastPrice,volume",
+                          "lastPrice,volume",
                 "startDate": start_date.strftime("%Y-%m-%d"),
                 "endDate": end_date.strftime("%Y-%m-%d"),
                 "orderBy": "tradeTime",
@@ -263,6 +279,16 @@ def save_prices_for_contract(
                         df = df.rename(columns={"Last": "Close"})
 
                         logger.info(f"writing to: {save_path}")
+                        try:
+                            existing_df = pd.read_csv(save_path, index_col=[0], parse_dates=True)
+                            df = pd.concat([existing_df, df], axis=0)
+                        except FileNotFoundError:
+                            pass
+
+                        df['index'] = df.index
+                        df.sort_values(by='index', axis=0, inplace=True)
+                        df.drop_duplicates(subset=['index'], keep='last', inplace=True)
+                        df.drop(columns=['index'])
                         df.to_csv(save_path, date_format="%Y-%m-%dT%H:%M:%S%z")
 
                     else:
@@ -283,16 +309,16 @@ def save_prices_for_contract(
 
 
 def get_barchart_downloads(
-    session: requests.Session,
-    contract_map: dict = None,
-    contract_list: list = None,
-    instr_list: list = None,
-    save_dir: str = None,
-    start_year: int = 1950,
-    end_year: int = 2025,
-    dry_run: bool = False,
-    do_daily: bool = True,
-    pause_between_downloads: bool = True,
+        session: requests.Session,
+        contract_map: dict = None,
+        contract_list: list = None,
+        instr_list: list = None,
+        save_dir: str = None,
+        start_year: int = 1950,
+        end_year: int = 2025,
+        dry_run: bool = False,
+        do_daily: bool = True,
+        pause_between_downloads: bool = True,
 ):
     """
     Run a download session, performing as many contract downloads as possible, given
@@ -357,30 +383,37 @@ def get_barchart_downloads(
                     )
                     continue
 
-                # download and save
-                result = save_prices_for_contract(
-                    session,
-                    contract,
-                    save_path,
-                    start_date,
-                    end_date,
-                    dry_run=dry_run,
-                )
-
-                if result in [
-                    HistoricalDataResult.EXISTS,
-                    HistoricalDataResult.NONE,
-                    HistoricalDataResult.INSUFFICIENT,
-                ]:
-                    continue
-                elif result == HistoricalDataResult.EXCEED:
-                    logger.info("Max daily download reached, aborting")
-                    max_exceeded = True
-                    break
+                if resolution == Resolution.Minute and (end_date - start_date + timedelta(days=1)).days * MINUTES_IN_DAY > 20000:
+                    start_dates, end_dates = _get_start_end_dates_with_record_limits(start_date, end_date)
                 else:
-                    if pause_between_downloads:
-                        # cursory attempt to not appear like a bot
-                        time.sleep(0 if dry_run else randint(7, 15))
+                    start_dates = [start_date]
+                    end_dates = [end_date]
+
+                for this_start_date, this_end_date in zip(start_dates, end_dates):
+                    # download and save
+                    result = save_prices_for_contract(
+                        session,
+                        contract,
+                        save_path,
+                        this_start_date,
+                        this_end_date,
+                        dry_run=dry_run,
+                    )
+
+                    if result in [
+                        HistoricalDataResult.EXISTS,
+                        HistoricalDataResult.NONE,
+                        HistoricalDataResult.INSUFFICIENT,
+                    ]:
+                        continue
+                    elif result == HistoricalDataResult.EXCEED:
+                        logger.info("Max daily download reached, aborting")
+                        max_exceeded = True
+                        break
+                    else:
+                        if pause_between_downloads:
+                            # cursory attempt to not appear like a bot
+                            time.sleep(0 if dry_run else randint(7, 15))
 
         # logout
         resp = session.get(BARCHART_URL + "logout", timeout=10)
@@ -392,11 +425,11 @@ def get_barchart_downloads(
 
 
 def update_barchart_downloads(
-    instr_code: str = "GOLD",
-    contract_map: dict = None,
-    save_dir: str = None,
-    days_ago: int = 360,
-    dry_run: bool = False,
+        instr_code: str = "GOLD",
+        contract_map: dict = None,
+        save_dir: str = None,
+        days_ago: int = 360,
+        dry_run: bool = False,
 ):
     """
     Update recent previously downloaded files for an instrument.
@@ -459,11 +492,11 @@ def update_barchart_downloads(
 
 
 def update_barchart_contract_file(
-    session: requests.Session,
-    contract_map: dict,
-    path: str,
-    contract_id: str,
-    res: Resolution,
+        session: requests.Session,
+        contract_map: dict,
+        path: str,
+        contract_id: str,
+        res: Resolution,
 ):
     """
     Update a previously downloaded contract price file.
@@ -509,6 +542,8 @@ def update_barchart_contract_file(
     update = get_historical_prices_for_contract(session, contract_id, res)
     if res == Resolution.Hour:
         start = last_index_date + timedelta(hours=1)
+    elif res == Resolution.Minute:
+        start = last_index_date + timedelta(minutes=1)
     else:
         start = last_index_date + timedelta(hours=25)
     end = now - timedelta(days=2)
@@ -531,7 +566,7 @@ def update_barchart_contract_file(
 
 
 def get_historical_prices_for_contract(
-    session, instr_code: str, resolution: Resolution = Resolution.Day
+        session, instr_code: str, resolution: Resolution = Resolution.Day
 ) -> pd.DataFrame:
     if not instr_code:
         raise BCException("instr_code is required")
@@ -625,7 +660,7 @@ def _build_contract_list(start_year, end_year, instr_list=None, contract_map=Non
         for year in range(start_year, end_year):
             for month_code in list(rollcycle):
                 instrument_list.append(
-                    f"{futures_code}{month_code}{str(year)[len(str(year))-2:]}"
+                    f"{futures_code}{month_code}{str(year)[len(str(year)) - 2:]}"
                 )
         contracts_per_instrument[instr] = instrument_list
         count = count + len(instrument_list)
@@ -709,7 +744,7 @@ def _build_save_path(instr_code, month, year, res: Resolution, save_directory):
 
 
 def _get_contract_month_year(contract):
-    year_code = int(contract[len(contract) - 2 :])
+    year_code = int(contract[len(contract) - 2:])
     month_code = contract[len(contract) - 3]
     if year_code > 50:
         year = 1900 + year_code
@@ -750,6 +785,26 @@ def _get_start_end_dates(month, year, instr_config=None):
     return start_date, end_date
 
 
+def _get_start_end_dates_with_record_limits(start_date, end_date):
+    minutes_between = (end_date - start_date + timedelta(days=1)).days * MINUTES_IN_DAY
+
+    start_dates = [start_date]
+    end_dates = []
+    previous_start_date = start_dates[0]
+    for chunk in range(0, minutes_between, 20000):
+        next_end_date = previous_start_date + timedelta(minutes=20000)
+        next_start_date = next_end_date + timedelta(days=1)
+
+        end_dates.append(next_end_date)
+        start_dates.append(next_start_date)
+
+        previous_start_date = next_start_date
+
+    end_dates.append(end_date)
+
+    return start_dates, end_dates
+
+
 def _month_from_contract_letter(contract_letter):
     """
     Returns month number (1 is January) from contract letter
@@ -775,8 +830,8 @@ def _get_resolution(save_path):
 
 
 def _raw_barchart_data_to_df(
-    price_data_raw: pd.DataFrame,
-    bar_freq: Resolution = Resolution.Day,
+        price_data_raw: pd.DataFrame,
+        bar_freq: Resolution = Resolution.Day,
 ) -> pd.DataFrame:
     if price_data_raw is None:
         logger.warning("No historical price data from Barchart")
@@ -813,7 +868,7 @@ def _get_barchart_id(instr, year, month):
 
 
 def _instr_code_from_file_name(file_name):
-    instr_code = file_name[file_name.find("_") + 1 : file_name.rfind("_")]
+    instr_code = file_name[file_name.find("_") + 1: file_name.rfind("_")]
     return instr_code
 
 
@@ -896,7 +951,7 @@ if __name__ == "__main__":
             "NQ": {"code": "NQ", "cycle": "FGHKMNQUVXZ", "exchange": "CME"},
             "ES": {"code": "ES", "cycle": "FGHKMNQUVXZ", "exchange": "CME"},
             "CL": {"code": "CL", "cycle": "FGHKMNQUVXZ", "exchange": "NYMEX"},
-            "GC": {"code": "NQ", "cycle": "FGHKMNQUVXZ", "exchange": "COMEX"},
+            "GC": {"code": "GC", "cycle": "FGHKMNQUVXZ", "exchange": "COMEX"},
         },
         save_dir=get_resolved_pathname('sysinit.futures.bcutils.data'),
         start_year=2000,
