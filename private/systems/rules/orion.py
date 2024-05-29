@@ -369,6 +369,10 @@ if __name__ == "__main__":
     apds = [
         mpf.make_addplot(small_price_bars['LOW'].where(signals > 0, np.nan), type='scatter', marker='^'),
         mpf.make_addplot(small_price_bars['HIGH'].where(signals < 0, np.nan), type='scatter', marker='v'),
+        mpf.make_addplot(orion_trades['long_stop_loss_prices'], type='line'),
+        mpf.make_addplot(orion_trades['long_profit_taker'], type='line'),
+        mpf.make_addplot(orion_trades['short_stop_loss_prices'], type='line'),
+        mpf.make_addplot(orion_trades['short_profit_taker'], type='line'),
     ]
     mpf.plot(
         small_price_bars.rename(columns=dict(OPEN="Open", HIGH="High", LOW="Low", CLOSE="Close")),
