@@ -95,6 +95,8 @@ def orion(big_price_bars: pd.DataFrame, small_price_bars: pd.DataFrame, setup_lo
         short_stop_loss_prices=short_stop_loss_prices,
         long_profit_taker=long_profit_taker,
         short_profit_taker=short_profit_taker,
+        long_zones=long_zone,
+        short_zones=short_zone,
     )
 
     return return_dict
