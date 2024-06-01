@@ -1,21 +1,13 @@
 import pandas as pd
 
 
-from syscore.dateutils import ROOT_BDAYS_INYEAR
 from syscore.exceptions import missingData
 
 from sysdata.config.configdata import Config
 from sysdata.sim.sim_data import simData
-from sysquant.estimators.vol import robust_vol_calc
 
-from systems.buffering import (
-    calculate_buffers,
-    calculate_actual_buffers,
-    apply_buffers_to_position,
-)
 from systems.stage import SystemStage
 from systems.system_cache import input, diagnostic, output
-from systems.forecast_combine import ForecastCombine
 from systems.rawdata import RawData
 
 
@@ -61,18 +53,59 @@ class OrionPositionSizing(SystemStage):
         We don't allow this to be changed in config
         """
 
-        avg_abs_forecast = self.avg_abs_forecast()
-        vol_scalar = self.get_average_position_at_subsystem_level(instrument_code)
-        forecast = self.get_combined_forecast(instrument_code)
+        forecast = self.get_forecast(instrument_code)
+        risk_per_trade_pct_capital = self.get_risk_per_trade_pct_capital()
+        capital_allocated_to_instrument = self.get_capital_allocated_to_instrument(instrument_code)
 
-        vol_scalar = vol_scalar.reindex(forecast.index, method="ffill")
+        risk_per_trade_currency = risk_per_trade_pct_capital * capital_allocated_to_instrument
 
-        subsystem_position_raw = vol_scalar * forecast / avg_abs_forecast
+        stop_loss_level = self.get_stop_loss_levels(instrument_code)
+        price = self.get_underlying_price(instrument_code)
+        multiplier = self.rawdata_stage.get_value_of_block_price_move(instrument_code)
+
+        risk_currency = forecast.sign() * (price - stop_loss_level) * multiplier
+        subsystem_position_raw = risk_per_trade_currency / risk_currency
         subsystem_position = self._apply_long_only_constraint_to_position(
             position=subsystem_position_raw, instrument_code=instrument_code
         )
+        subsystem_position = subsystem_position.round(0)
 
         return subsystem_position
+
+    def get_capital_allocated_to_instrument(self, instrument_code: str):
+        notional_trading_capital = self.get_notional_trading_capital()
+        instruments_weight = self.config.instrument_weights[instrument_code]
+        capital_allocated_to_instrument = notional_trading_capital * instruments_weight
+
+        return capital_allocated_to_instrument
+
+    def get_risk_per_trade_pct_capital(self):
+        return self.config.get_element_or_default("risk_per_trade_pct_capital", 0)
+
+    @input
+    def get_stop_loss_levels(self, instrument_code: str):
+        strategy_outputs = self.get_strategy_outputs(instrument_code)
+        return strategy_outputs['stop_loss_levels_after_slpt']
+
+    @input
+    def get_forecast(self, instrument_code: str):
+        strategy_outputs = self.get_strategy_outputs(instrument_code)
+        return strategy_outputs['forecasts']
+
+    @input
+    def get_strategy_outputs(self, instrument_code: str):
+        return self.pathdependency_stage.get_signals_after_limit_price_is_hit_stop_loss_and_profit_target(
+            instrument_code
+        )
+
+    @property
+    def pathdependency_stage(self):
+        try:
+            pathdependency_stage = getattr(self.parent, "pathdependency")
+        except AttributeError as e:
+            raise missingData from e
+
+        return pathdependency_stage
 
     def _apply_long_only_constraint_to_position(
         self, position: pd.Series, instrument_code: str
@@ -95,139 +128,9 @@ class OrionPositionSizing(SystemStage):
         long_only = config.get_element_or_default("long_only_instruments", [])
         return long_only
 
-    def avg_abs_forecast(self) -> float:
-        return self.config.average_absolute_forecast
-
     @property
     def config(self) -> Config:
         return self.parent.config
-
-    @diagnostic()
-    def get_average_position_at_subsystem_level(
-        self, instrument_code: str
-    ) -> pd.Series:
-        """
-        Get ratio of required volatility vs volatility of instrument in instrument's own currency
-
-        :param instrument_code: instrument to get values for
-        :type instrument_code: str
-
-        :returns: Tx1 pd.DataFrame
-
-        >>> from systems.tests.testdata import get_test_object_futures_with_comb_forecasts
-        >>> from systems.basesystem import System
-        >>> (comb, fcs, rules, rawdata, data, config)=get_test_object_futures_with_comb_forecasts()
-        >>> system=System([rawdata, rules, fcs, comb, PositionSizing()], data, config)
-        >>>
-        >>> system.positionSize.get_average_position_at_subsystem_level("EDOLLAR").tail(2)
-                    vol_scalar
-        2015-12-10   11.187869
-        2015-12-11   10.332930
-        >>>
-        >>> ## without raw data
-        >>> system2=System([ rules, fcs, comb, PositionSizing()], data, config)
-        >>> system2.positionSize.get_average_position_at_subsystem_level("EDOLLAR").tail(2)
-                    vol_scalar
-        2015-12-10   11.180444
-        2015-12-11   10.344278
-        """
-
-        self.log.debug(
-            "Calculating volatility scalar for %s" % instrument_code,
-            instrument_code=instrument_code,
-        )
-
-        instr_value_vol = self.get_instrument_value_vol(instrument_code)
-        cash_vol_target = self.get_daily_cash_vol_target()
-
-        vol_scalar = cash_vol_target / instr_value_vol
-
-        return vol_scalar
-
-    @diagnostic()
-    def get_instrument_value_vol(self, instrument_code: str) -> pd.Series:
-        """
-        Get value of volatility of instrument in base currency (used for account value)
-
-        :param instrument_code: instrument to get values for
-        :type instrument_code: str
-
-        :returns: Tx1 pd.DataFrame
-
-        >>> from systems.tests.testdata import get_test_object_futures_with_comb_forecasts
-        >>> from systems.basesystem import System
-        >>> (comb, fcs, rules, rawdata, data, config)=get_test_object_futures_with_comb_forecasts()
-        >>> system=System([rawdata, rules, fcs, comb, PositionSizing()], data, config)
-        >>>
-        >>> system.positionSize.get_instrument_value_vol("EDOLLAR").tail(2)
-                          ivv
-        2015-12-10  89.382530
-        2015-12-11  96.777975
-        >>>
-        >>> system2=System([rawdata, rules, fcs, comb, PositionSizing()], data, config)
-        >>> system2.positionSize.get_instrument_value_vol("EDOLLAR").tail(2)
-                          ivv
-        2015-12-10  89.382530
-        2015-12-11  96.777975
-
-        """
-
-        self.log.debug(
-            "Calculating instrument value vol for %s" % instrument_code,
-            instrument_code=instrument_code,
-        )
-
-        instr_ccy_vol = self.get_instrument_currency_vol(instrument_code)
-        fx_rate = self.get_fx_rate(instrument_code)
-
-        fx_rate = fx_rate.reindex(instr_ccy_vol.index, method="ffill")
-
-        instr_value_vol = instr_ccy_vol.ffill() * fx_rate
-
-        return instr_value_vol
-
-    @diagnostic()
-    def get_instrument_currency_vol(self, instrument_code: str) -> pd.Series:
-        """
-        Get value of volatility of instrument in instrument's own currency
-
-        :param instrument_code: instrument to get values for
-        :type instrument_code: str
-
-        :returns: Tx1 pd.DataFrame
-
-        >>> from systems.tests.testdata import get_test_object_futures_with_comb_forecasts
-        >>> from systems.basesystem import System
-        >>> (comb, fcs, rules, rawdata, data, config)=get_test_object_futures_with_comb_forecasts()
-        >>> system=System([rawdata, rules, fcs, comb, PositionSizing()], data, config)
-        >>>
-        >>> system.positionSize.get_instrument_currency_vol("EDOLLAR").tail(2)
-                           icv
-        2015-12-10  135.272415
-        2015-12-11  146.464756
-        >>>
-        >>> system2=System([ rules, fcs, comb, PositionSizing()], data, config)
-        >>> system2.positionSize.get_instrument_currency_vol("EDOLLAR").tail(2)
-                           icv
-        2015-12-10  135.362246
-        2015-12-11  146.304072
-
-        """
-
-        self.log.debug(
-            "Calculating instrument currency vol for %s" % instrument_code,
-            instrument_code=instrument_code,
-        )
-
-        block_value = self.get_block_value(instrument_code)
-        daily_perc_vol = self.get_price_volatility(instrument_code)
-
-        ## FIXME WHY NOT RESAMPLE?
-        (block_value, daily_perc_vol) = block_value.align(daily_perc_vol, join="inner")
-
-        instr_ccy_vol = block_value.ffill() * daily_perc_vol
-
-        return instr_ccy_vol
 
     @diagnostic()
     def get_block_value(self, instrument_code: str) -> pd.Series:
@@ -327,123 +230,10 @@ class OrionPositionSizing(SystemStage):
     def data(self) -> simData:
         return self.parent.data
 
-    @input
-    def get_price_volatility(self, instrument_code: str) -> pd.Series:
-        """
-        Get the daily % volatility; If a rawdata stage exists from there; otherwise work it out
-
-        :param instrument_code: instrument to get values for
-        :type instrument_code: str
-
-        :returns: Tx1 pd.DataFrame
-
-        KEY INPUT
-
-        Note as an exception to the normal rule we cache this, as it sometimes comes from data
-
-        >>> from systems.tests.testdata import get_test_object_futures_with_comb_forecasts
-        >>> from systems.basesystem import System
-        >>> (comb, fcs, rules, rawdata, data, config)=get_test_object_futures_with_comb_forecasts()
-        >>> system=System([rawdata, rules, fcs, comb, PositionSizing()], data, config)
-        >>>
-        >>> system.positionSize.get_price_volatility("EDOLLAR").tail(2)
-                         vol
-        2015-12-10  0.055281
-        2015-12-11  0.059789
-        >>>
-        >>> system2=System([ rules, fcs, comb, PositionSizing()], data, config)
-        >>>
-        >>> system2.positionSize.get_price_volatility("EDOLLAR").tail(2)
-                         vol
-        2015-12-10  0.055318
-        2015-12-11  0.059724
-        """
-
-        daily_perc_vol = self.rawdata_stage.get_daily_percentage_volatility(
-            instrument_code
-        )
-
-        return daily_perc_vol
-
-    @diagnostic()
-    def get_vol_target_dict(self) -> dict:
-        # FIXME UGLY REPLACE WITH COMPONENTS
-        """
-        Get the daily cash vol target
-
-        Requires: percentage_vol_target, notional_trading_capital, base_currency
-
-        To find these, look in (a) in system.config.parameters...
-                (b).... if not found, in systems.get_defaults.py
-
-
-        :Returns: tuple (str, float): str is base_currency, float is value
-
-        >>> from systems.tests.testdata import get_test_object_futures_with_comb_forecasts
-        >>> from systems.basesystem import System
-        >>> (comb, fcs, rules, rawdata, data, config)=get_test_object_futures_with_comb_forecasts()
-        >>> system=System([rawdata, rules, fcs, comb, PositionSizing()], data, config)
-        >>>
-        >>> ## from config
-        >>> system.positionSize.get_vol_target_dict()['base_currency']
-        'GBP'
-        >>>
-        >>> ## from defaults
-        >>> del(config.base_currency)
-        >>> system=System([rawdata, rules, fcs, comb, PositionSizing()], data, config)
-        >>> system.positionSize.get_vol_target_dict()['base_currency']
-        'USD'
-        >>>
-
-        """
-
-        self.log.debug("Getting vol target")
-
-        percentage_vol_target = self.get_percentage_vol_target()
-
-        notional_trading_capital = self.get_notional_trading_capital()
-
-        base_currency = self.get_base_currency()
-
-        annual_cash_vol_target = self.annual_cash_vol_target()
-        daily_cash_vol_target = self.get_daily_cash_vol_target()
-
-        vol_target_dict = dict(
-            base_currency=base_currency,
-            percentage_vol_target=percentage_vol_target,
-            notional_trading_capital=notional_trading_capital,
-            annual_cash_vol_target=annual_cash_vol_target,
-            daily_cash_vol_target=daily_cash_vol_target,
-        )
-
-        return vol_target_dict
-
-    @diagnostic()
-    def get_daily_cash_vol_target(self) -> float:
-        annual_cash_vol_target = self.annual_cash_vol_target()
-        daily_cash_vol_target = annual_cash_vol_target / ROOT_BDAYS_INYEAR
-
-        return daily_cash_vol_target
-
-    @diagnostic()
-    def annual_cash_vol_target(self) -> float:
-        notional_trading_capital = self.get_notional_trading_capital()
-        percentage_vol_target = self.get_percentage_vol_target()
-
-        annual_cash_vol_target = (
-            notional_trading_capital * percentage_vol_target / 100.0
-        )
-
-        return annual_cash_vol_target
-
     @diagnostic()
     def get_notional_trading_capital(self) -> float:
         notional_trading_capital = float(self.config.notional_trading_capital)
         return notional_trading_capital
-
-    @diagnostic()
-    def get_percentage_vol_target(self):
-        return float(self.config.percentage_vol_target)
 
     @diagnostic()
     def get_base_currency(self) -> str:
@@ -480,35 +270,6 @@ class OrionPositionSizing(SystemStage):
         )
 
         return fx_rate
-
-    @input
-    def get_combined_forecast(self, instrument_code: str) -> pd.Series:
-        """
-        Get the combined forecast from previous module
-
-        :param instrument_code: instrument to get values for
-        :type instrument_code: str
-
-        :returns: Tx1 pd.DataFrame
-
-        KEY INPUT
-
-        >>> from systems.tests.testdata import get_test_object_futures_with_comb_forecasts
-        >>> from systems.basesystem import System
-        >>> (comb, fcs, rules, rawdata, data, config)=get_test_object_futures_with_comb_forecasts()
-        >>> system=System([rawdata, rules, fcs, comb, PositionSizing()], data, config)
-        >>>
-        >>> system.positionSize.get_combined_forecast("EDOLLAR").tail(2)
-                    comb_forecast
-        2015-12-10       1.619134
-        2015-12-11       2.462610
-        """
-
-        return self.comb_forecast_stage.get_combined_forecast(instrument_code)
-
-    @property
-    def comb_forecast_stage(self) -> ForecastCombine:
-        return self.parent.combForecast
 
 
 if __name__ == "__main__":
