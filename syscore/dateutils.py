@@ -338,6 +338,8 @@ DAILY_PRICE_FREQ = Frequency.Day
 BUSINESS_DAY_FREQ = Frequency.BDay
 HOURLY_FREQ = Frequency.Hour
 MINUTE_FREQ = Frequency.Minute
+FIVE_MINUTE_FREQ = Frequency.Minutes_5
+
 
 MIXED_FREQ = Frequency.Mixed
 

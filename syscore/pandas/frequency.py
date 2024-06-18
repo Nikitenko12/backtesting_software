@@ -7,6 +7,7 @@ from syscore.dateutils import (
     Frequency,
     BUSINESS_DAY_FREQ,
     HOURLY_FREQ,
+    MINUTE_FREQ,
     NOTIONAL_CLOSING_TIME_AS_PD_OFFSET,
     check_time_matches_closing_time_to_second,
     BUSINESS_DAYS_IN_YEAR,
@@ -231,6 +232,9 @@ def infer_frequency(df_or_ts: Union[pd.DataFrame, pd.Series]) -> Frequency:
         return BUSINESS_DAY_FREQ
     if inferred == "H":
         return HOURLY_FREQ
+    if inferred == "min":
+        return MINUTE_FREQ
+
     raise Exception("Frequency of time series unknown")
 
 
