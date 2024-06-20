@@ -1,4 +1,4 @@
-from syscore.dateutils import BUSINESS_DAY_FREQ, HOURLY_FREQ
+from syscore.dateutils import BUSINESS_DAY_FREQ, HOURLY_FREQ, MINUTE_FREQ
 from syscore.pandas.frequency import infer_frequency
 from syscore.constants import arg_not_supplied
 from sysobjects.instruments import instrumentCosts
@@ -41,19 +41,21 @@ class accountInputs(SystemStage):
                 instrument_prices = self.get_daily_prices(instrument_code)
             elif frequency is HOURLY_FREQ:
                 instrument_prices = self.get_hourly_prices(instrument_code)
+            elif frequency is MINUTE_FREQ:
+                instrument_prices = self.get_minute_prices(instrument_code)
             else:
                 raise Exception(
-                    "Frequency %s does not have prices for %s should be hourly or daily"
+                    "Frequency %s does not have prices for %s should be minute or hourly or daily"
                     % (str(frequency), instrument_code)
                 )
         except:
             self.log.warning(
-                "Going to index hourly prices for %s to position_or_forecast might result in phantoms"
+                "Going to index minute prices for %s to position_or_forecast might result in phantoms"
                 % instrument_code
             )
-            hourly_prices = self.get_hourly_prices(instrument_code)
+            minute_prices = self.get_minute_prices(instrument_code)
 
-            instrument_prices = hourly_prices.reindex(position_or_forecast.index)
+            instrument_prices = minute_prices.reindex(position_or_forecast.index)
 
         return instrument_prices
 
@@ -62,6 +64,9 @@ class accountInputs(SystemStage):
 
     def get_hourly_prices(self, instrument_code: str) -> pd.Series:
         return self.parent.rawdata.get_hourly_prices(instrument_code)
+
+    def get_minute_prices(self, instrument_code: str) -> pd.Series:
+        return self.parent.rawdata.get_minute_prices(instrument_code)
 
     def get_capped_forecast(
         self, instrument_code: str, rule_variation_name: str

@@ -332,14 +332,17 @@ def following_one_second_before_midnight_of_date(
 
 Frequency = Enum(
     "Frequency",
-    "Unknown Year Month Week BDay Day Hour Minutes_15 Minutes_5 Minute Seconds_10 Second Mixed",
+    "Unknown Year Month Week BDay Day Hour Minutes_30 Minutes_20 Minutes_15 Minutes_10 Minutes_5 Minute Seconds_10 Second Mixed",
 )
 DAILY_PRICE_FREQ = Frequency.Day
 BUSINESS_DAY_FREQ = Frequency.BDay
 HOURLY_FREQ = Frequency.Hour
 MINUTE_FREQ = Frequency.Minute
 FIVE_MINUTE_FREQ = Frequency.Minutes_5
-
+TEN_MINUTE_FREQ = Frequency.Minutes_10
+FIFTEEN_MINUTE_FREQ = Frequency.Minutes_15
+TWENTY_MINUTE_FREQ = Frequency.Minutes_20
+THIRTY_MINUTE_FREQ = Frequency.Minutes_30
 
 MIXED_FREQ = Frequency.Mixed
 
@@ -359,7 +362,10 @@ def from_config_frequency_pandas_resample(freq: Frequency) -> str:
         Frequency.Hour: "H",
         Frequency.Year: "A",
         Frequency.Day: "D",
+        Frequency.Minutes_30: "30T",
+        Frequency.Minutes_20: "20T",
         Frequency.Minutes_15: "15T",
+        Frequency.Minutes_10: "10T",
         Frequency.Minutes_5: "5T",
         Frequency.Minute: "T",
         Frequency.Seconds_10: "10S",
@@ -389,7 +395,10 @@ def from_frequency_to_times_per_year(freq: Frequency) -> float:
         Frequency.Hour: HOURS_PER_DAY * BUSINESS_DAYS_IN_YEAR,
         Frequency.Year: 1,
         Frequency.Day: CALENDAR_DAYS_IN_YEAR,
+        Frequency.Minutes_30: (MINUTES_PER_YEAR / 30),
+        Frequency.Minutes_20: (MINUTES_PER_YEAR / 20),
         Frequency.Minutes_15: (MINUTES_PER_YEAR / 15),
+        Frequency.Minutes_10: (MINUTES_PER_YEAR / 10),
         Frequency.Minutes_5: (MINUTES_PER_YEAR / 5),
         Frequency.Minute: MINUTES_PER_YEAR,
         Frequency.Seconds_10: SECONDS_IN_YEAR / 10,
@@ -418,7 +427,10 @@ def from_config_frequency_to_frequency(freq_as_str: str) -> Frequency:
         "B": Frequency.BDay,
         "D": Frequency.Day,
         "H": Frequency.Hour,
+        "30M": Frequency.Minutes_30,
+        "20M": Frequency.Minutes_20,
         "15M": Frequency.Minutes_15,
+        "10M" : Frequency.Minutes_10,
         "5M": Frequency.Minutes_5,
         "M": Frequency.Minute,
         "10S": Frequency.Seconds_10,

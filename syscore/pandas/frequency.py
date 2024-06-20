@@ -8,6 +8,11 @@ from syscore.dateutils import (
     BUSINESS_DAY_FREQ,
     HOURLY_FREQ,
     MINUTE_FREQ,
+    FIVE_MINUTE_FREQ,
+    TEN_MINUTE_FREQ,
+    FIFTEEN_MINUTE_FREQ,
+    TWENTY_MINUTE_FREQ,
+    THIRTY_MINUTE_FREQ,
     NOTIONAL_CLOSING_TIME_AS_PD_OFFSET,
     check_time_matches_closing_time_to_second,
     BUSINESS_DAYS_IN_YEAR,
@@ -15,6 +20,7 @@ from syscore.dateutils import (
     MONTHS_IN_YEAR,
     CALENDAR_DAYS_IN_YEAR,
     HOURS_PER_DAY,
+    MINUTES_PER_HOUR,
 )
 from syscore.pandas.pdutils import uniquets
 
@@ -232,7 +238,7 @@ def infer_frequency(df_or_ts: Union[pd.DataFrame, pd.Series]) -> Frequency:
         return BUSINESS_DAY_FREQ
     if inferred == "H":
         return HOURLY_FREQ
-    if inferred == "min":
+    if inferred[-3:] == "min":
         return MINUTE_FREQ
 
     raise Exception("Frequency of time series unknown")
@@ -240,6 +246,7 @@ def infer_frequency(df_or_ts: Union[pd.DataFrame, pd.Series]) -> Frequency:
 
 UPPER_BOUND_HOUR_FRACTION_OF_A_DAY = 1.0 / 2.0
 LOWER_BOUND_HOUR_FRACTION_OF_A_DAY = 1.0 / HOURS_PER_DAY
+LOWER_BOUND_MINUTE_FRACTION_OF_A_DAY = 1.0 / (MINUTES_PER_HOUR * HOURS_PER_DAY)
 BUSINESS_CALENDAR_FRACTION = CALENDAR_DAYS_IN_YEAR / BUSINESS_DAYS_IN_YEAR
 
 
@@ -252,6 +259,9 @@ def infer_frequency_approx(df_or_ts: Union[pd.DataFrame, pd.Series]) -> Frequenc
     if _probably_hourly_freq(avg_time_delta_in_days):
         return HOURLY_FREQ
 
+    if _probably_minute_freq(avg_time_delta_in_days):
+        return MINUTE_FREQ
+
     raise Exception("Can't work out approximate frequency")
 
 
@@ -262,6 +272,12 @@ def _probably_daily_freq(avg_time_delta_in_days: float) -> bool:
 def _probably_hourly_freq(avg_time_delta_in_days: float) -> bool:
     return (avg_time_delta_in_days < UPPER_BOUND_HOUR_FRACTION_OF_A_DAY) & (
         avg_time_delta_in_days >= LOWER_BOUND_HOUR_FRACTION_OF_A_DAY
+    )
+
+
+def _probably_minute_freq(avg_time_delta_in_days: float) -> bool:
+    return (avg_time_delta_in_days < LOWER_BOUND_HOUR_FRACTION_OF_A_DAY) & (
+        avg_time_delta_in_days >= LOWER_BOUND_MINUTE_FRACTION_OF_A_DAY
     )
 
 

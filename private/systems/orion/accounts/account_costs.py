@@ -8,7 +8,7 @@ from syscore.pandas.strategy_functions import turnover
 from sysquant.estimators.turnover import turnoverDataForTradingRule
 
 from systems.system_cache import diagnostic, input
-from systems.accounts.account_inputs import accountInputs
+from private.systems.orion.accounts.account_inputs import accountInputs
 
 
 class accountCosts(accountInputs):

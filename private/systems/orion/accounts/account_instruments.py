@@ -3,16 +3,15 @@ import pandas as pd
 from syscore.pandas.strategy_functions import turnover
 
 from systems.system_cache import diagnostic, dont_cache
-from systems.accounts.account_costs import accountCosts
-from systems.accounts.account_buffering_system import accountBufferingSystemLevel
-from systems.accounts.pandl_calculators.pandl_SR_cost import pandlCalculationWithSRCosts
-from systems.accounts.pandl_calculators.pandl_cash_costs import (
+from private.systems.orion.accounts.account_costs import accountCosts
+from private.systems.orion.accounts.pandl_calculators.pandl_SR_cost import pandlCalculationWithSRCosts
+from private.systems.orion.accounts.pandl_calculators.pandl_cash_costs import (
     pandlCalculationWithCashCostsAndFills,
 )
-from systems.accounts.curves.account_curve import accountCurve
+from private.systems.orion.accounts.curves.account_curve import accountCurve
 
 
-class accountInstruments(accountCosts, accountBufferingSystemLevel):
+class accountInstruments(accountCosts):
     # dont' cache: just a switch method
     @dont_cache
     def pandl_for_instrument(
@@ -45,8 +44,8 @@ class accountInstruments(accountCosts, accountBufferingSystemLevel):
             instrument_code=instrument_code,
         )
 
-        positions = self.get_buffered_position(
-            instrument_code, roundpositions=roundpositions
+        positions = self.get_actual_position(
+            instrument_code
         )
 
         instrument_pandl = self._pandl_for_instrument_with_positions(

@@ -21,13 +21,13 @@ from private.systems.orion.accounts.order_simulator.account_curve_order_simulato
 from private.systems.orion.accounts.order_simulator.pandl_order_simulator import (
     DataAtIDXPoint,
 )
-from private.systems.orion.accounts.order_simulator.hourly_market_orders import (
-    HourlyOrderSimulatorOfMarketOrders,
+from private.systems.orion.accounts.order_simulator.minute_market_orders import (
+    MinuteOrderSimulatorOfMarketOrders,
 )
 from systems.system_cache import diagnostic
 
 
-class HourlyOrderSimulatorOfLimitOrders(HourlyOrderSimulatorOfMarketOrders):
+class MinuteOrderSimulatorOfLimitOrders(MinuteOrderSimulatorOfMarketOrders):
     @property
     def orders_fills_function(self) -> Callable:
         return generate_order_and_fill_at_idx_point_for_limit_orders
@@ -49,6 +49,8 @@ def generate_order_and_fill_at_idx_point_for_limit_orders(
         return empty_list_of_orders_with_no_fills(
             fill_datetime=notional_datetime_for_empty_fill
         )
+    if quantity > 0:
+        limit_price = data_for_idx.long_limit_price
 
     simple_order = SimpleOrderWithDate(
         quantity=quantity,
@@ -76,3 +78,4 @@ class AccountWithOrderSimulatorForLimitOrders(AccountWithOrderSimulator):
             is_subsystem=is_subsystem,
         )
         return order_simulator
+

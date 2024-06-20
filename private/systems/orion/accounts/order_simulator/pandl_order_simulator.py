@@ -8,12 +8,12 @@ import numpy as np
 
 
 from syscore.cache import Cache
-from systems.accounts.order_simulator.simple_orders import (
+from private.systems.orion.accounts.order_simulator.simple_orders import (
     ListOfSimpleOrdersWithDate,
     SimpleOrderWithDate,
 )
 from sysobjects.fills import ListOfFills, Fill
-from systems.accounts.order_simulator.fills_and_orders import (
+from private.systems.orion.accounts.order_simulator.fills_and_orders import (
     ListOfSimpleOrdersAndResultingFill,
     empty_list_of_orders_with_no_fills,
 )
@@ -27,9 +27,12 @@ class PositionsOrdersFills:
 
 
 class OrdersSeriesData(object):
-    def __init__(self, price_series: pd.Series, unrounded_positions: pd.Series):
+    def __init__(self, price_series: pd.Series, unrounded_positions: pd.Series,
+                 long_limit_price_series: pd.Series = None, short_limit_price_series: pd.Series = None):
         self.price_series = price_series
         self.unrounded_positions = unrounded_positions
+        self.long_limit_price_series = long_limit_price_series
+        self.short_limit_price_series = short_limit_price_series
 
 
 @dataclass
@@ -214,7 +217,7 @@ def generate_positions_orders_and_fills_from_series_data(
 
 DataAtIDXPoint = namedtuple(
     "DataAtIDXPoint",
-    ["current_optimal_position", "current_price", "next_price", "next_datetime"],
+    ["current_optimal_position", "current_price", "next_price", "next_datetime", "limit_price"],
 )
 
 

@@ -6,15 +6,15 @@ from syscore.objects import resolve_function
 from syscore.pandas.pdutils import from_scalar_values_to_ts
 
 from systems.system_cache import output, diagnostic
-from systems.accounts.account_portfolio import accountPortfolio
-from systems.accounts.account_buffering_system import accountBufferingSystemLevel
+from private.systems.orion.accounts.account_portfolio import accountPortfolio
+from private.systems.orion.accounts.account_costs import accountCosts
 
-from systems.accounts.curves.dict_of_account_curves import dictOfAccountCurves
-from systems.accounts.curves.account_curve_group import accountCurveGroup
-from systems.accounts.curves.account_curve import accountCurve
+from private.systems.orion.accounts.curves.dict_of_account_curves import dictOfAccountCurves
+from private.systems.orion.accounts.curves.account_curve_group import accountCurveGroup
+from private.systems.orion.accounts.curves.account_curve import accountCurve
 
 
-class accountWithMultiplier(accountPortfolio, accountBufferingSystemLevel):
+class accountWithMultiplier(accountPortfolio, accountCosts):
     @output(not_pickable=True)
     def portfolio_with_multiplier(self, delayfill=True, roundpositions=True):
         self.log.info("Calculating pandl for portfolio with multiplier")
@@ -62,8 +62,8 @@ class accountWithMultiplier(accountPortfolio, accountBufferingSystemLevel):
             instrument_code=instrument_code,
         )
 
-        positions = self.get_buffered_position_with_multiplier(
-            instrument_code, roundpositions=roundpositions
+        positions = self.get_actual_position_with_multiplier(
+            instrument_code
         )
 
         instrument_pandl = self._pandl_for_instrument_with_positions(
@@ -76,7 +76,7 @@ class accountWithMultiplier(accountPortfolio, accountBufferingSystemLevel):
         return instrument_pandl
 
     @diagnostic()
-    def get_buffered_position_with_multiplier(
+    def get_actual_position_with_multiplier(
         self, instrument_code: str, roundpositions: bool = True
     ) -> pd.Series:
         """
@@ -92,17 +92,8 @@ class accountWithMultiplier(accountPortfolio, accountBufferingSystemLevel):
         """
 
         optimal_position = self.get_actual_position(instrument_code)
-        pos_buffers = self.get_actual_buffers_for_position(instrument_code)
 
-        buffered_position = (
-            self._get_buffered_position_given_optimal_position_and_buffers(
-                optimal_position=optimal_position,
-                pos_buffers=pos_buffers,
-                roundpositions=roundpositions,
-            )
-        )
-
-        return buffered_position
+        return optimal_position
 
     @diagnostic()
     def get_actual_capital(self) -> pd.Series:

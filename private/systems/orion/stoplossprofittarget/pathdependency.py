@@ -9,8 +9,14 @@ class StopLossProfitTarget(SystemStage):
     """
     This stage goes directly after the rules stage
     """
+
+    @property
+    def name(self):
+        return "pathdependency"
+
+    ## FIXME: Make this instrument_code dependent
     @output
-    def get_signals_after_limit_price_is_hit_stop_loss_and_profit_target(self):
+    def get_signals_after_limit_price_is_hit_stop_loss_and_profit_target(self, instrument_code: str):
         signals_after_limit_prices = get_signals_after_limit_price_is_hit(
             prices=self.prices,
             long_limit_prices=self.long_limit_prices,

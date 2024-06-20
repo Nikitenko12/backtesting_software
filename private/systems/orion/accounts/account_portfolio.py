@@ -1,8 +1,8 @@
 import numpy as np
 from systems.system_cache import output
-from systems.accounts.account_instruments import accountInstruments
-from systems.accounts.curves.dict_of_account_curves import dictOfAccountCurves
-from systems.accounts.curves.account_curve_group import accountCurveGroup
+from private.systems.orion.accounts.account_instruments import accountInstruments
+from private.systems.orion.accounts.curves.dict_of_account_curves import dictOfAccountCurves
+from private.systems.orion.accounts.curves.account_curve_group import accountCurveGroup
 
 
 class accountPortfolio(accountInstruments):

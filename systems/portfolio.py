@@ -94,7 +94,7 @@ class Portfolios(SystemStage):
         cap_multiplier = self.capital_multiplier()
         cap_multiplier = cap_multiplier.reindex(notional_position.index).ffill()
 
-        actual_position = notional_position * cap_multiplier
+        actual_position = round(notional_position * cap_multiplier)
 
         return actual_position
 
