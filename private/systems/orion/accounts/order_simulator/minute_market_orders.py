@@ -41,20 +41,47 @@ def _build_minute_series_data_for_order_simulator(
     path_dependency_outputs = system_accounts_stage.parent.positionSize.get_strategy_outputs(instrument_code)
     long_limit_price_series = path_dependency_outputs['long_limit_prices_after_slpt']
     short_limit_price_series = path_dependency_outputs['short_limit_prices_after_slpt']
+    long_profit_target_level_series = path_dependency_outputs['long_profit_target_levels']
+    short_profit_target_level_series = path_dependency_outputs['short_profit_target_levels']
+    long_stop_loss_level_series = path_dependency_outputs['long_stop_loss_level_series']
+    short_stop_loss_level_series = path_dependency_outputs['short_stop_loss_level_series']
 
     price_series = price_series.sort_index()
     unrounded_positions = unrounded_positions.sort_index()
+    long_limit_price_series = long_limit_price_series.sort_index()
+    short_limit_price_series = short_limit_price_series.sort_index()
+    long_profit_target_level_series = long_profit_target_level_series.sort_index()
+    short_profit_target_level_series = short_profit_target_level_series.sort_index()
+    long_stop_loss_level_series = long_stop_loss_level_series.sort_index()
+    short_stop_loss_level_series = short_stop_loss_level_series.sort_index()
 
-    all_index = pd.concat([price_series, unrounded_positions, long_limit_price_series, short_limit_price_series], axis=1).index
+    all_index = pd.concat(
+        [
+            price_series,
+            unrounded_positions,
+            long_limit_price_series,
+            short_limit_price_series,
+            long_profit_target_level_series,
+            short_profit_target_level_series,
+            long_stop_loss_level_series,
+            short_stop_loss_level_series,
+        ],
+        axis=1
+    ).index
 
     price_series = price_series.reindex(all_index).ffill()
     unrounded_positions = unrounded_positions.reindex(all_index).ffill()
     long_limit_price_series = long_limit_price_series.reindex(all_index).ffill()
     short_limit_price_series = short_limit_price_series.reindex(all_index).ffill()
+    long_profit_target_level_series = long_profit_target_level_series.reindex(all_index).ffill()
+    short_profit_target_level_series = short_profit_target_level_series.reindex(all_index).ffill()
+    long_stop_loss_level_series = long_stop_loss_level_series.reindex(all_index).ffill()
+    short_stop_loss_level_series = short_stop_loss_level_series.reindex(all_index).ffill()
 
     series_data = OrdersSeriesData(
         price_series=price_series, unrounded_positions=unrounded_positions,
-        long_limit_price_series=long_limit_price_series, short_limit_price_series=short_limit_price_series
+        long_limit_price_series=long_limit_price_series, short_limit_price_series=short_limit_price_series,
+
     )
     return series_data
 
