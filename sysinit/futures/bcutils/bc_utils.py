@@ -955,9 +955,9 @@ if __name__ == "__main__":
         },
         save_dir=get_resolved_pathname('sysinit.futures.bcutils.data'),
         start_year=2000,
-        end_year=2024,
+        end_year=2023,
         dry_run=False,
-        do_daily=True,
+        do_daily=False,
     )
 
     # do_barchart_updates(
