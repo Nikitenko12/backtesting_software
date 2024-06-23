@@ -255,8 +255,10 @@ def save_prices_for_contract(
                 payload["interval"] = 60
 
             elif res == Resolution.Minute:
-                payload["type"] = "minutes"
+                payload["type"] = "minutes" #"nearby_minutes"
                 payload["interval"] = 1
+                # payload["totalVolume"] = "true"
+                # payload["backAdjustHistory"] = "true"
 
             if not dry_run:
                 resp = session.post(
@@ -597,20 +599,24 @@ def get_historical_prices_for_contract(
         }
 
         if resolution == Resolution.Day:
-            data_url = BARCHART_URL + "proxies/timeseries/queryeod.ashx"
+            data_url = BARCHART_URL + "proxies/timeseries/historical/queryeod.ashx"
             payload["data"] = "daily"
             payload["contractroll"] = "expiration"
         elif resolution == Resolution.Hour:
-            data_url = BARCHART_URL + "proxies/timeseries/queryminutes.ashx"
+            data_url = BARCHART_URL + "proxies/timeseries/historical/queryminutes.ashx"
             payload["interval"] = "60"
             payload["contractroll"] = "combined"
         elif resolution == Resolution.Minute:
-            data_url = BARCHART_URL + "proxies/timeseries/queryminutes.ashx"
+            data_url = BARCHART_URL + "proxies/timeseries/historical/queryminutes.ashx"
             payload["interval"] = "1"
             payload["contractroll"] = "combined"
 
         # get prices for instrument from BC internal API
         prices_resp = session.get(data_url, headers=headers, params=payload)
+        if prices_resp.status_code != 200:
+            raise Exception(
+                f"response status: {prices_resp.status_code} {prices_resp.reason}"
+            )
         ratelimit = prices_resp.headers["x-ratelimit-remaining"]
         if int(ratelimit) <= 15:
             time.sleep(20)
@@ -948,14 +954,14 @@ if __name__ == "__main__":
             }
         ),
         contract_map={
-            "NQ": {"code": "NQ", "cycle": "FGHKMNQUVXZ", "exchange": "CME"},
-            "ES": {"code": "ES", "cycle": "FGHKMNQUVXZ", "exchange": "CME"},
-            "CL": {"code": "CL", "cycle": "FGHKMNQUVXZ", "exchange": "NYMEX"},
-            "GC": {"code": "GC", "cycle": "FGHKMNQUVXZ", "exchange": "COMEX"},
+            # "NQ": {"code": "NQ", "cycle": "FGHJKMNQUVXZ", "exchange": "CME"},
+            # "ES": {"code": "ES", "cycle": "FGHJKMNQUVXZ", "exchange": "CME"},
+            "CL": {"code": "CL", "cycle": "FGHJKMNQUVXZ", "exchange": "NYMEX"},
+            # "GC": {"code": "GC", "cycle": "FGHJKMNQUVXZ", "exchange": "COMEX"},
         },
         save_dir=get_resolved_pathname('sysinit.futures.bcutils.data'),
         start_year=2000,
-        end_year=2023,
+        end_year=2025,
         dry_run=False,
         do_daily=False,
     )
