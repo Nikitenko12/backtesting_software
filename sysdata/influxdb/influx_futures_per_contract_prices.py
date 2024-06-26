@@ -94,7 +94,7 @@ class influxFuturesContractPriceData(futuresContractPriceData):
         ident = from_contract_and_freq_to_key(
             futures_contract_object, frequency=frequency
         )
-        futures_price_data_as_pd = pd.DataFrame(futures_price_data)
+        futures_price_data_as_pd = pd.DataFrame(futures_price_data, dtype=float)
 
         self.influx_connection.write(ident[0], futures_price_data_as_pd, tags={"frequency": ident[1]})
 
