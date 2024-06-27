@@ -218,7 +218,7 @@ def from_contract_and_freq_to_key(contract: futuresContract, frequency: Frequenc
     if frequency is MIXED_FREQ:
         frequency_str = ""
     else:
-        frequency_str = frequency.name + "/"
+        frequency_str = frequency.name
 
     return from_tuple_to_key(
         [frequency_str, contract.instrument_code, contract.date_str]

@@ -4,7 +4,7 @@ import numpy as np
 
 from syscore.exceptions import missingData
 from syscore.constants import arg_not_supplied
-from syscore.dateutils import Frequency, from_config_frequency_to_frequency, n_days_ago
+from syscore.dateutils import Frequency, from_config_frequency_to_frequency, n_days_ago, DAILY_PRICE_FREQ, MINUTE_FREQ
 
 from sysobjects.contracts import futuresContract
 from sysobjects.dict_of_futures_per_contract_prices import (
@@ -114,7 +114,7 @@ class diagPrices(productionDataLayerGeneric):
         self, ignore_stale: bool = True
     ) -> list:
         unique_list_of_instruments = (
-            self.db_futures_contract_price_data.get_list_of_instrument_codes_with_merged_price_data()
+            self.db_futures_contract_price_data.get_list_of_instrument_codes_with_price_data_at_frequency(MINUTE_FREQ)
         )
 
         if ignore_stale:

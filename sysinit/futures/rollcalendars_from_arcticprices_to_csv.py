@@ -13,6 +13,7 @@ from sysproduction.data.production_data_objects import (
 )
 
 from sysdata.data_blob import dataBlob
+from syscore.fileutils import get_resolved_pathname
 
 diag_prices = diagPrices()
 
@@ -129,4 +130,4 @@ if __name__ == "__main__":
     instrument_code = get_valid_instrument_code_from_user(source="single")
     ## MODIFY DATAPATH IF REQUIRED
     # build_and_write_roll_calendar(instrument_code, output_datapath=arg_not_supplied)
-    build_and_write_roll_calendar(instrument_code, output_datapath="/home/rob/")
+    build_and_write_roll_calendar(instrument_code, output_datapath=get_resolved_pathname('data.futures.roll_calendars_csv'))
