@@ -203,26 +203,6 @@ class contractWithRollParametersAndPrices(object):
         # Nothing found
         raise missingData
 
-    def find_best_carry_contract_with_price_data(self):
-        """
-        Finds the best carry contract in list_of_contract_dates after current_contract, within the roll cycle
-           defined by roll parameters
-
-        This will either be the next valid contract, or the first valid preceeding contract in the price cycle
-
-        :return: a contract object with roll data, or None if we can't find one
-        """
-        carry_offset = self.contract.roll_parameters.carry_offset
-
-        if carry_offset == 1.0:
-            best_carry_contract = self.find_next_priced_contract_with_price_data()
-        elif carry_offset == -1.0:
-            best_carry_contract = self.find_previous_priced_contract_with_price_data()
-        else:
-            raise Exception("Carry offset should be 1 or -1!")
-
-        return best_carry_contract
-
 
 def find_earliest_held_contract_with_price_data(
     roll_parameters_object: rollParameters, price_dict: dictFuturesContractFinalPrices
@@ -294,11 +274,6 @@ def _check_valid_contract(
 ) -> bool:
     if try_contract.date_str in list_of_contract_dates:
         # possible candidate, let's check carry
-        try:
-            try_carry_contract = try_contract.find_best_carry_contract_with_price_data()
-        except missingData:
-            ## No good
-            return False
+        return True
 
-    ## All good
-    return True
+    return False

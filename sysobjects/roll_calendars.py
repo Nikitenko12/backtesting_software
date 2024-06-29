@@ -5,7 +5,6 @@ import numpy as np
 from sysinit.futures.build_roll_calendars import (
     generate_approximate_calendar,
     adjust_to_price_series,
-    # back_out_roll_calendar_from_multiple_prices,
 )
 from sysobjects.dict_of_futures_per_contract_prices import (
     dictFuturesContractFinalPrices,
@@ -60,24 +59,6 @@ class rollCalendar(pd.DataFrame):
 
         return roll_calendar
 
-    # @classmethod
-    # def back_out_from_multiple_prices(
-    #     rollCalendar, multiple_prices: futuresMultiplePrices
-    # ):
-    #     """
-    #
-    #     :param multiple_prices: output from futuresDataForSim.FuturesData.get_current_and_forward_price_data(instrument_code)
-    #            columns: PRICE, FORWARD, FORWARD_CONTRACT, PRICE_CONTRACT
-    #
-    #     :return: rollCalendar
-    #     """
-    #     roll_calendar_as_pd = back_out_roll_calendar_from_multiple_prices(
-    #         multiple_prices
-    #     )
-    #     roll_calendar_object = rollCalendar(roll_calendar_as_pd)
-    #
-    #     return roll_calendar_object
-
     def check_if_date_index_monotonic(self) -> bool:
         if not self.index._is_strictly_monotonic_increasing:
             print(
@@ -123,7 +104,6 @@ def _check_row_of_row_calendar(
 ) -> bool:
     current_contract = str(calendar_row.current_contract)
     next_contract = str(calendar_row.next_contract)
-    carry_contract = str(calendar_row.carry_contract)
     roll_date = calendar_row.name
 
     try:
@@ -140,15 +120,6 @@ def _check_row_of_row_calendar(
         print(
             "On roll date %s contract %s is missing from futures prices"
             % (roll_date, next_contract)
-        )
-        return False
-
-    try:
-        carry_prices = dict_of_futures_contract_prices[carry_contract]
-    except KeyError:
-        print(
-            "On roll date %s contract %s is missing from futures prices"
-            % (roll_date, carry_contract)
         )
         return False
 

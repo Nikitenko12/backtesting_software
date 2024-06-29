@@ -41,7 +41,6 @@ class futuresAdjustedPrices(pd.DataFrame):
         futuresAdjustedPrices,
         individual_contracts: dictFuturesContractPrices,
         roll_calendar: rollCalendar,
-        forward_fill: bool = False,
     ):
         """
         Do backstitching of multiple prices using panama method

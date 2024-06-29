@@ -142,7 +142,7 @@ class influxData(object):
                 f' |> filter(fn: (r) => r._measurement == "{ident}")' \
                 f' |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")'
 
-        item = self.query_api.query_data_frame(query, org=self.org)[PRICE_DATA_COLUMNS]
+        item = self.query_api.query_data_frame(query, org=self.org, data_frame_index=["_time"])[PRICE_DATA_COLUMNS]
         if isinstance(item, list):
             item = item[0]
 
@@ -182,7 +182,7 @@ class influxData(object):
         for measurement in measurements:
             query = f'''import \"influxdata/influxdb/schema\"
 
-                    schema.measurementTagValues(bucket: "{self.bucket_name}", tag: "frequency", measurement: "{measurement}")'''
+                    schema.measurementTagValues(bucket: "{self.bucket_name}", tag: "frequency", measurement: "{measurement}", start: -100y)'''
 
             these_tags = self.query_api.query(query, org=self.org)[0].records
             keynames_and_tags[measurement] = [x.values['_value'] for x in these_tags]

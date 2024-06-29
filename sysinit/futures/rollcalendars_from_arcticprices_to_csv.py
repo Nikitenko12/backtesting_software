@@ -1,3 +1,4 @@
+from syscore.dateutils import MINUTE_FREQ
 from syscore.interactive.input import true_if_answer_is_yes
 from syscore.constants import arg_not_supplied
 
@@ -53,8 +54,8 @@ def build_and_write_roll_calendar(
 
     csv_roll_calendars = csvRollCalendarData(output_datapath)
 
-    dict_of_all_futures_contract_prices = prices.get_merged_prices_for_instrument(
-        instrument_code
+    dict_of_all_futures_contract_prices = prices.get_prices_at_frequency_for_instrument(
+        instrument_code, MINUTE_FREQ
     )
     dict_of_futures_contract_prices = dict_of_all_futures_contract_prices.final_prices()
 
