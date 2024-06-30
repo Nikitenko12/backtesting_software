@@ -56,8 +56,8 @@ def process_adjusted_prices_single_instrument(
         csv_adjusted_prices,
         csv_roll_calendar_data,
     ) = _get_data_inputs(csv_adj_data_path, csv_roll_calendar_data_path)
-    if influx_individual_contract_prices is arg_not_supplied:
-        influx_individual_contract_prices = influx_individual_contract_prices.get_prices_at_frequency_for_instrument(instrument_code, MINUTE_FREQ)
+
+    influx_individual_contract_prices = influx_individual_contract_prices.get_prices_at_frequency_for_instrument(instrument_code, MINUTE_FREQ)
 
     roll_calendar = csv_roll_calendar_data.get_roll_calendar(instrument_code)
     adjusted_prices = futuresAdjustedPrices.stitch_individual_contracts_from_roll_calendars(
