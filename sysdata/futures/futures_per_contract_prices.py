@@ -219,6 +219,11 @@ class futuresContractPriceData(baseData):
                 instrument_code=instrument_code, frequency=frequency
             )
         )
+        # list_of_contracts = listOfFuturesContracts([
+        #     futuresContract(instrument_code, '20240700'),
+        #     futuresContract(instrument_code, '20240800'),
+        #     futuresContract(instrument_code, '20240900'),
+        # ])
         dict_of_prices = dictFuturesContractPrices(
             [
                 (

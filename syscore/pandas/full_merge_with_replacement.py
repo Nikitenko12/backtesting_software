@@ -157,8 +157,8 @@ def full_merge_of_existing_dataframe(
 
 
 def full_merge_of_existing_series(
-    old_series: pd.Series, new_series: pd.Series, keep_older: bool = True
-) -> pd.Series:
+    old_series: pd.DataFrame, new_series: pd.DataFrame, keep_older: bool = True
+) -> pd.DataFrame:
     """
     Merges old data with new data.
     Any Nan in the existing data will be replaced (be careful!)
@@ -185,8 +185,7 @@ def full_merge_of_existing_series(
         return old_series
 
     if keep_older:
-        joint_data = pd.concat([old_series, new_series], axis=1)
-        joint_data.columns = ["original", "new"]
+        joint_data = pd.concat([old_series, new_series], axis=1, keys=["original", "new"])
 
         # fill to the left
         # NA from the original series will be preserved

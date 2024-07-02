@@ -93,13 +93,15 @@ def _panama_stitch(
         raise Exception("Can't stitch an empty dictFuturesContractPrices object")
 
     previous_calendar = roll_calendar.iloc[0]
-    previous_contract_prices = individual_contracts[previous_calendar.current_contract]
+    previous_contract_prices = individual_contracts[str(previous_calendar.current_contract)]
     previous_row = previous_contract_prices.iloc[0:, ]
     adjusted_prices_values = [previous_row[PRICE_DATA_COLUMNS]]
 
-    for dateindex in previous_contract_prices.index[1:]:
-        current_calendar = roll_calendar.reindex_like(previous_contract_prices, method='ffill').loc[dateindex, :]
-        current_contract_prices = individual_contracts[current_calendar.current_contract]
+    roll_calendar = roll_calendar.tz_localize(previous_contract_prices.index[0].tz)
+
+    for dateindex in previous_contract_prices.loc[(previous_contract_prices.index == previous_calendar.name):].index:
+        current_calendar = roll_calendar.reindex(previous_contract_prices.index, method='ffill').loc[dateindex, :]
+        current_contract_prices = individual_contracts[str(current_calendar.current_contract)]
         current_row = current_contract_prices.loc[dateindex]
 
         if current_calendar.current_contract == previous_calendar.current_contract:
@@ -110,9 +112,9 @@ def _panama_stitch(
             # A roll has occured:
             adjusted_prices_values = _roll_in_panama(
                 adjusted_prices_values,
-                previous_calendar.current_contract,
+                str(previous_calendar.current_contract),
                 previous_row,
-                current_calendar.current_contract,
+                str(current_calendar.current_contract),
                 current_row,
             )
 
@@ -176,7 +178,7 @@ def _update_adjusted_prices_from_individual_contracts_no_roll(
     last_date_in_existing_adjusted_prices = existing_adjusted_prices.index[-1]
     last_contract_in_roll_calendar = roll_calendar.current_contract.iloc[-1]
     try:
-        new_contract_price_data = individual_contracts[last_contract_in_roll_calendar]
+        new_contract_price_data = individual_contracts[str(last_contract_in_roll_calendar)]
     except KeyError:
         raise Exception(
             "No contract named %s in dict of individual contracts" % (
