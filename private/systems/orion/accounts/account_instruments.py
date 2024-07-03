@@ -92,86 +92,14 @@ class accountInstruments(accountCosts):
             instrument_code=instrument_code,
         )
 
-        use_SR_costs = self.use_SR_costs
-
-        if use_SR_costs:
-            instrument_pandl = self._pandl_for_instrument_with_SR_costs(
-                instrument_code,
-                positions=positions,
-                roundpositions=roundpositions,
-                delayfill=delayfill,
-            )
-        else:
-            instrument_pandl = self._pandl_for_instrument_with_cash_costs(
-                instrument_code,
-                positions=positions,
-                roundpositions=roundpositions,
-                delayfill=delayfill,
-            )
+        instrument_pandl = self._pandl_for_instrument_with_cash_costs(
+            instrument_code,
+            positions=positions,
+            roundpositions=roundpositions,
+            delayfill=delayfill,
+        )
 
         return instrument_pandl
-
-    @diagnostic(not_pickable=True)
-    def _pandl_for_instrument_with_SR_costs(
-        self,
-        instrument_code: str,
-        positions: pd.Series,
-        delayfill: bool = True,
-        roundpositions: bool = True,
-    ) -> accountCurve:
-        price = self.get_instrument_prices_for_position_or_forecast(
-            instrument_code, position_or_forecast=positions
-        )
-        fx = self.get_fx_rate(instrument_code)
-        value_of_price_point = self.get_value_of_block_price_move(instrument_code)
-        daily_returns_volatility = self.get_daily_returns_volatility(instrument_code)
-
-        capital = self.get_notional_capital()
-
-        instrument_turnover = self.instrument_turnover(
-            instrument_code, roundpositions=roundpositions
-        )
-        annualised_SR_cost = self.get_SR_cost_given_turnover(
-            instrument_code, instrument_turnover
-        )
-
-        average_position = self.get_average_position_for_instrument_at_portfolio_level(
-            instrument_code
-        )
-
-        pandl_calculator = pandlCalculationWithSRCosts(
-            price,
-            SR_cost=annualised_SR_cost,
-            positions=positions,
-            average_position=average_position,
-            daily_returns_volatility=daily_returns_volatility,
-            capital=capital,
-            value_per_point=value_of_price_point,
-            delayfill=delayfill,
-            fx=fx,
-            roundpositions=roundpositions,
-        )
-
-        account_curve = accountCurve(pandl_calculator, weighted=True)
-
-        return account_curve
-
-    @diagnostic()
-    def turnover_at_portfolio_level(
-        self, instrument_code: str, roundpositions: bool = True
-    ) -> float:
-        ## assumes we use all capital
-        average_position_for_turnover = self.get_average_position_at_subsystem_level(
-            instrument_code
-        )
-
-        ## Using actual capital
-        positions = self.get_buffered_position(
-            instrument_code, roundpositions=roundpositions
-        )
-
-        ## Turnover will be at portfolio level, so a small number, but meaningful when added up
-        return turnover(positions, average_position_for_turnover)
 
     @diagnostic(not_pickable=True)
     def _pandl_for_instrument_with_cash_costs(

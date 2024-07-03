@@ -8,7 +8,7 @@ from sysdata.sim.sim_data import simData
 
 from systems.stage import SystemStage
 from systems.system_cache import input, diagnostic, output
-from systems.rawdata import RawData
+from private.systems.orion.rawdata.rawdata import OrionRawData as RawData
 
 
 class OrionPositionSizing(SystemStage):
@@ -82,23 +82,20 @@ class OrionPositionSizing(SystemStage):
     def get_risk_per_trade_pct_capital(self):
         return self.config.get_element_or_default("risk_per_trade_pct_capital", 0)
 
-    @input
     def get_stop_loss_levels(self, instrument_code: str):
         strategy_outputs = self.get_strategy_outputs(instrument_code)
         return strategy_outputs['stop_loss_levels_after_slpt']
 
-    @input
     def get_forecast(self, instrument_code: str):
         strategy_outputs = self.get_strategy_outputs(instrument_code)
         return strategy_outputs['forecasts']
 
-    @input
     def get_strategy_outputs(self, instrument_code: str):
-        return self.pathdependency_stage.get_signals_after_limit_price_is_hit_stop_loss_and_profit_target(
+        pathdependency_stage = self.pathdependency_stage()
+        return pathdependency_stage.get_signals_after_limit_price_is_hit_stop_loss_and_profit_target(
             instrument_code
         )
 
-    @property
     def pathdependency_stage(self):
         try:
             pathdependency_stage = getattr(self.parent, "pathdependency")

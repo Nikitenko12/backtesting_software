@@ -83,7 +83,7 @@ class simData(baseData):
             start_date = getattr(self, "_start_date_for_data_from_config")
         except AttributeError:
             start_date = self._get_and_set_start_date_for_data_from_config()
-        return start_date
+        return pd.Timestamp(start_date, tz='utc')
 
     def _get_and_set_start_date_for_data_from_config(self) -> datetime:
         start_date = _resolve_start_date(self)

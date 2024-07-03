@@ -85,71 +85,11 @@ class accountSubsystem(accountCosts):
             instrument_code=instrument_code,
         )
 
-        use_SR_cost = self.use_SR_costs
-
-        if use_SR_cost:
-            pandl = self._pandl_for_subsystem_with_SR_costs(
-                instrument_code, delayfill=delayfill, roundpositions=roundpositions
-            )
-        else:
-            pandl = self._pandl_for_subsystem_with_cash_costs(
-                instrument_code, delayfill=delayfill, roundpositions=roundpositions
-            )
+        pandl = self._pandl_for_subsystem_with_cash_costs(
+            instrument_code, delayfill=delayfill, roundpositions=roundpositions
+        )
 
         return pandl
-
-    @diagnostic(not_pickable=True)
-    def _pandl_for_subsystem_with_SR_costs(
-        self, instrument_code, delayfill=True, roundpositions=False
-    ) -> accountCurve:
-        pandl_calculator = self._pandl_calculator_for_subsystem_with_SR_costs(
-            instrument_code=instrument_code,
-            delayfill=delayfill,
-            roundpositions=roundpositions,
-        )
-
-        account_curve = accountCurve(pandl_calculator)
-
-        return account_curve
-
-    @diagnostic(not_pickable=True)
-    def _pandl_calculator_for_subsystem_with_SR_costs(
-        self, instrument_code, delayfill=True, roundpositions=False
-    ) -> pandlCalculationWithSRCosts:
-        positions = self.get_subsystem_position(instrument_code)
-        price = self.get_instrument_prices_for_position_or_forecast(
-            instrument_code, position_or_forecast=positions
-        )
-
-        fx = self.get_fx_rate(instrument_code)
-
-        value_of_price_point = self.get_value_of_block_price_move(instrument_code)
-        daily_returns_volatility = self.get_daily_returns_volatility(instrument_code)
-
-        ## following doesn't include IDM or instrument weight
-        average_position = self.get_average_position_at_subsystem_level(instrument_code)
-
-        subsystem_turnover = self.subsystem_turnover(instrument_code)
-        annualised_SR_cost = self.get_SR_cost_given_turnover(
-            instrument_code, subsystem_turnover
-        )
-
-        capital = self.get_notional_capital()
-
-        pandl_calculator = pandlCalculationWithSRCosts(
-            price,
-            SR_cost=annualised_SR_cost,
-            positions=positions,
-            average_position=average_position,
-            daily_returns_volatility=daily_returns_volatility,
-            capital=capital,
-            value_per_point=value_of_price_point,
-            delayfill=delayfill,
-            fx=fx,
-            roundpositions=roundpositions,
-        )
-
-        return pandl_calculator
 
     @diagnostic(not_pickable=True)
     def _pandl_for_subsystem_with_cash_costs(

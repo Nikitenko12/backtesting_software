@@ -150,15 +150,18 @@ class influxData(object):
 
     def write(self, ident: str, data: pd.DataFrame, tags: dict = None):
         df = data.copy()
-        for tag in list(tags.keys()):
-            df[tag] = tags[tag]
+        tags_keys = None
+        if tags is not None:
+            tags_keys = list(tags.keys())
+            for tag in tags_keys:
+                df[tag] = tags[tag]
 
         self.write_api.write(
             bucket=self.bucket_name,
             org=self.org,
             record=df,
             data_frame_measurement_name=ident,
-            data_frame_tag_columns=list(tags.keys()),
+            data_frame_tag_columns=tags_keys,
         )
 
     def get_keynames(self) -> list:
@@ -166,6 +169,7 @@ class influxData(object):
         
                 schema.measurements(bucket: \"{self.bucket_name}\")'''
         keynames = self.query_api.query(query, org=self.org)[0].records
+        keynames = [x.values['_value'] for x in keynames]
 
         return keynames
 

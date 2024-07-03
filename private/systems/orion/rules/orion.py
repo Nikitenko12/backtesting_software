@@ -12,7 +12,25 @@ import numpy as np
 VERY_BIG_NUMBER = 99999999999999999
 
 
-def orion(big_price_bars: pd.DataFrame, small_price_bars: pd.DataFrame, setup_lookback=10, rr=2.0):
+def orion(minute_bars: pd.DataFrame, big_timeframe='30T', small_timeframe='5T', setup_lookback=10, rr=2.0):
+    big_price_bars = minute_bars.resample(big_timeframe).agg(
+        {
+            'OPEN': 'first',
+            'HIGH': 'max',
+            'LOW': 'min',
+            'LAST': 'last',
+            'VOLUME': 'sum',
+        }
+    )
+    small_price_bars = minute_bars.resample(small_timeframe).agg(
+        {
+            'OPEN': 'first',
+            'HIGH': 'max',
+            'LOW': 'min',
+            'LAST': 'last',
+            'VOLUME': 'sum',
+        }
+    )
 
     may_we_look_for_long_setup = look_for_long_setup(big_price_bars, lookback=setup_lookback)
     may_we_look_for_short_setup = look_for_short_setup(big_price_bars, lookback=setup_lookback)

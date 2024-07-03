@@ -52,17 +52,3 @@ class accountPortfolio(accountInstruments):
         )
 
         return account_curve
-
-    @output()
-    def total_portfolio_level_turnover(self, roundpositions=True):
-        list_of_instruments = self.get_instrument_list()
-        list_of_turnovers_at_portfolio_level = [
-            self.turnover_at_portfolio_level(
-                instrument_code, roundpositions=roundpositions
-            )
-            for instrument_code in list_of_instruments
-        ]
-
-        total_turnover = np.nansum(list_of_turnovers_at_portfolio_level)
-
-        return total_turnover

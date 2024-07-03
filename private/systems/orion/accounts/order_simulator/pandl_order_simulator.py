@@ -124,12 +124,7 @@ class OrderSimulator:
         return self.cache.get(self._series_data)
 
     def _series_data(self) -> OrdersSeriesData:
-        series_data = build_daily_series_data_for_order_simulator(
-            system_accounts_stage=self.system_accounts_stage,  # ignore type hint
-            instrument_code=self.instrument_code,
-            is_subsystem=self.is_subsystem,
-        )
-        return series_data
+        raise NotImplementedError("Needs to inherit from child class")
 
     @property
     def cache(self) -> Cache:
@@ -142,39 +137,6 @@ class OrderSimulator:
     @property
     def idx_data_function(self) -> Callable:
         return get_order_sim_daily_data_at_idx_point
-
-
-def build_daily_series_data_for_order_simulator(
-    system_accounts_stage,  ## no explicit type would cause circular import
-    instrument_code: str,
-    is_subsystem: bool = False,
-) -> OrdersSeriesData:
-    price_series = system_accounts_stage.get_daily_prices(instrument_code)
-    if is_subsystem:
-        unrounded_positions = (
-            system_accounts_stage.get_unrounded_subsystem_position_for_order_simulator(
-                instrument_code
-            )
-        )
-    else:
-        unrounded_positions = (
-            system_accounts_stage.get_unrounded_instrument_position_for_order_simulator(
-                instrument_code
-            )
-        )
-
-    price_series = price_series.sort_index()
-    unrounded_positions = unrounded_positions.sort_index()
-
-    both_index = pd.concat([price_series, unrounded_positions], axis=1).index
-
-    price_series = price_series.reindex(both_index).ffill()
-    unrounded_positions = unrounded_positions.reindex(both_index).ffill()
-
-    series_data = OrdersSeriesData(
-        price_series=price_series, unrounded_positions=unrounded_positions
-    )
-    return series_data
 
 
 def generate_positions_orders_and_fills_from_series_data(

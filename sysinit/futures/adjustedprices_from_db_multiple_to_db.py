@@ -28,7 +28,7 @@ def _get_data_inputs(csv_adj_data_path, csv_roll_calendar_data_path):
 
 
 def process_adjusted_prices_all_instruments(
-    csv_adj_data_path=arg_not_supplied, csv_roll_calendar_data_path=arg_not_supplied, ADD_TO_DB=True, ADD_TO_CSV=False
+    csv_adj_data_path=arg_not_supplied, csv_roll_calendar_data_path=arg_not_supplied, ADD_TO_DB=True,
 ):
     db_individual_contract_prices, _notused, _alsonotused, _notusedaswell = _get_data_inputs(csv_adj_data_path, csv_roll_calendar_data_path)
     instrument_list = db_individual_contract_prices.get_list_of_instrument_codes_with_price_data_at_frequency(MINUTE_FREQ)
@@ -39,7 +39,6 @@ def process_adjusted_prices_all_instruments(
             csv_adj_data_path=csv_adj_data_path,
             csv_roll_calendar_data_path=csv_roll_calendar_data_path,
             ADD_TO_DB=ADD_TO_DB,
-            ADD_TO_CSV=ADD_TO_CSV,
         )
 
 
@@ -48,7 +47,6 @@ def process_adjusted_prices_single_instrument(
     csv_adj_data_path=arg_not_supplied,
     csv_roll_calendar_data_path=arg_not_supplied,
     ADD_TO_DB=True,
-    ADD_TO_CSV=False,
 ):
     (
         influx_individual_contract_prices,
@@ -72,10 +70,6 @@ def process_adjusted_prices_single_instrument(
         parquet_adjusted_prices.add_adjusted_prices(
             instrument_code, adjusted_prices, ignore_duplication=True
         )
-    if ADD_TO_CSV:
-        csv_adjusted_prices.add_adjusted_prices(
-            instrument_code, adjusted_prices, ignore_duplication=True
-        )
 
     return adjusted_prices
 
@@ -84,5 +78,5 @@ if __name__ == "__main__":
     input("Will overwrite existing prices are you sure?! CTL-C to abort")
     # modify flags and datapath as required
     process_adjusted_prices_all_instruments(
-        csv_adj_data_path=arg_not_supplied, csv_roll_calendar_data_path=arg_not_supplied, ADD_TO_DB=True, ADD_TO_CSV=True,
+        csv_adj_data_path=arg_not_supplied, csv_roll_calendar_data_path=arg_not_supplied, ADD_TO_DB=True,
     )

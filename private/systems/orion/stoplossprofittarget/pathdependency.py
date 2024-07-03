@@ -14,24 +14,62 @@ class StopLossProfitTarget(SystemStage):
     def name(self):
         return "pathdependency"
 
-    ## FIXME: Make this instrument_code dependent
-    @output
+    def get_inputs(self, instrument_code: str):
+        prices = self.get_prices(instrument_code)
+        signals_dict = self.signals_dict(instrument_code)
+
+        long_limit_prices = signals_dict['long_limit_prices']
+        short_limit_prices = signals_dict['short_limit_prices']
+        signals = signals_dict['signals']
+        long_zones = signals_dict['long_zones']
+        short_zones = signals_dict['short_zones']
+        long_stop_loss_levels = signals_dict['long_stop_loss_prices']
+        short_stop_loss_levels = signals_dict['short_stop_loss_prices']
+        long_profit_target_levels = signals_dict['long_profit_taker']
+        short_profit_target_levels = signals_dict['short_profit_taker']
+
+        return (
+            prices,
+            long_limit_prices,
+            short_limit_prices,
+            signals,
+            long_zones,
+            short_zones,
+            long_stop_loss_levels,
+            short_stop_loss_levels,
+            long_profit_target_levels,
+            short_profit_target_levels,
+        )
+
     def get_signals_after_limit_price_is_hit_stop_loss_and_profit_target(self, instrument_code: str):
+        (
+            prices,
+            long_limit_prices,
+            short_limit_prices,
+            signals,
+            long_zones,
+            short_zones,
+            long_stop_loss_levels,
+            short_stop_loss_levels,
+            long_profit_target_levels,
+            short_profit_target_levels,
+        ) = self.get_inputs(instrument_code)
+
         signals_after_limit_prices = get_signals_after_limit_price_is_hit(
-            prices=self.prices,
-            long_limit_prices=self.long_limit_prices,
-            short_limit_prices=self.short_limit_prices,
-            signals=self.signals,
-            long_zones=self.long_zones,
-            short_zones=self.short_zones,
+            prices=prices,
+            long_limit_prices=long_limit_prices,
+            short_limit_prices=short_limit_prices,
+            signals=signals,
+            long_zones=long_zones,
+            short_zones=short_zones,
         )
         updated_signals_dict = apply_stop_loss_and_profit_target_to_signals(
-            prices=self.prices,
+            prices=prices,
             signals=signals_after_limit_prices['signals'],
-            long_stop_loss_levels=self.long_stop_loss_levels,
-            short_stop_loss_levels=self.short_stop_loss_levels,
-            long_profit_target_levels=self.long_profit_target_levels,
-            short_profit_target_levels=self.short_profit_target_levels,
+            long_stop_loss_levels=long_stop_loss_levels,
+            short_stop_loss_levels=short_stop_loss_levels,
+            long_profit_target_levels=long_profit_target_levels,
+            short_profit_target_levels=short_profit_target_levels,
             long_limit_prices=signals_after_limit_prices['new_long_limit_prices'],
             short_limit_prices=signals_after_limit_prices['new_short_limit_prices'],
         )
@@ -40,52 +78,21 @@ class StopLossProfitTarget(SystemStage):
 
     @property
     def prices(self) -> pd.DataFrame:
-        return self.rules.data[1]
+        return self.rules.data
 
     @property
     def rules(self):
         return self.parent.rules
 
     @input
-    def signals_dict(self):
-        return self.rules.get_raw_forecast()
+    def signals_dict(self, instrument_code: str):
+        return self.rules.get_raw_forecast(instrument_code)
 
-    @property
-    def signals(self):
-        return self.signals_dict['signals']
-
-    @property
-    def long_limit_prices(self):
-        return self.signals_dict['long_limit_prices']
-
-    @property
-    def short_limit_prices(self):
-        return self.signals_dict['short_limit_prices']
-
-    @property
-    def long_stop_loss_levels(self):
-        return self.signals_dict['long_stop_loss_prices']
-
-    @property
-    def long_profit_target_levels(self):
-        return self.signals_dict['long_profit_taker']
-
-    @property
-    def short_stop_loss_levels(self):
-        return self.signals_dict['short_stop_loss_prices']
-
-    @property
-    def short_profit_target_levels(self):
-        return self.signals_dict['short_profit_taker']
-
-    @property
-    def long_zones(self):
-        return self.signals_dict['long_zones']
-
-    @property
-    def short_zones(self):
-        return self.signals_dict['short_zones']
-
+    @input
+    def get_prices(self, instrument_code: str):
+        return self.parent.rawdata.get_aggregated_minute_prices(
+            instrument_code, barsize=self.parent.rules.trading_rules.other_args['small_timeframe']
+        )
 
 def get_signals_after_limit_price_is_hit(
     prices: pd.DataFrame,

@@ -1,0 +1,18 @@
+notional_trading_capital: 1000000
+base_currency: "USD"
+
+risk_per_trade_pct_capital: 5.0
+
+trading_rules:
+  orion:
+     function: private.systems.orion.rules.orion.orion
+     data:
+         - "rawdata.get_minute_prices"
+     other_args:
+         big_timeframe: '30T'
+         small_timeframe: '5T'
+
+instrument_weights:
+  CL: 1.0
+
+use_SR_costs: False

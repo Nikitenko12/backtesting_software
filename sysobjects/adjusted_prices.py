@@ -95,13 +95,13 @@ def _panama_stitch(
 
     previous_calendar = roll_calendar.iloc[0]
     previous_contract_prices = individual_contracts[str(previous_calendar.current_contract)]
-    previous_row = previous_contract_prices.iloc[0:, ]
+    previous_row = previous_contract_prices.iloc[0]
     adjusted_prices_values = [previous_row[PRICE_DATA_COLUMNS]]
 
     valid_indexes = pd.concat(list(individual_contracts.values()), axis=0).sort_index().index.drop_duplicates()
     complete_roll_calendar = roll_calendar.reindex(valid_indexes, method='ffill').bfill().astype(int)
 
-    for dateindex in valid_indexes:
+    for dateindex in list(valid_indexes)[1:]:
         current_calendar = complete_roll_calendar.loc[dateindex, :]
         current_contract_prices = individual_contracts[str(current_calendar.current_contract)]
 
