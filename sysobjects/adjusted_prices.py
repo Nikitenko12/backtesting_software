@@ -88,6 +88,7 @@ def _panama_stitch(
     :return: pd.Series of adjusted prices
     """
     individual_contracts = copy(individual_contracts)
+    roll_calendar = roll_calendar.tz_localize(individual_contracts[list(individual_contracts.keys())[0]].index[0].tz)
 
     if individual_contracts.empty:
         raise Exception("Can't stitch an empty dictFuturesContractPrices object")
@@ -97,30 +98,33 @@ def _panama_stitch(
     previous_row = previous_contract_prices.iloc[0:, ]
     adjusted_prices_values = [previous_row[PRICE_DATA_COLUMNS]]
 
-    roll_calendar = roll_calendar.tz_localize(previous_contract_prices.index[0].tz)
+    valid_indexes = pd.concat(list(individual_contracts.values()), axis=0).sort_index().index.drop_duplicates()
+    complete_roll_calendar = roll_calendar.reindex(valid_indexes, method='ffill').bfill().astype(int)
 
-    for dateindex in previous_contract_prices.loc[(previous_contract_prices.index == previous_calendar.name):].index:
-        current_calendar = roll_calendar.reindex(previous_contract_prices.index, method='ffill').loc[dateindex, :]
+    for dateindex in valid_indexes:
+        current_calendar = complete_roll_calendar.loc[dateindex, :]
         current_contract_prices = individual_contracts[str(current_calendar.current_contract)]
-        current_row = current_contract_prices.loc[dateindex]
 
-        if current_calendar.current_contract == previous_calendar.current_contract:
-            # no roll has ocurred
-            # we just append the price
-            adjusted_prices_values.append(current_row[PRICE_DATA_COLUMNS])
-        else:
-            # A roll has occured:
-            adjusted_prices_values = _roll_in_panama(
-                adjusted_prices_values,
-                str(previous_calendar.current_contract),
-                previous_row,
-                str(current_calendar.current_contract),
-                current_row,
-            )
+        if dateindex in current_contract_prices.index:
+            current_row = current_contract_prices.loc[dateindex]
 
-        previous_calendar = current_calendar
-        previous_contract_prices = current_contract_prices
-        previous_row = current_row
+            if current_calendar.current_contract == previous_calendar.current_contract:
+                # no roll has ocurred
+                # we just append the price
+                adjusted_prices_values.append(current_row[PRICE_DATA_COLUMNS])
+            else:
+                # A roll has occured:
+                adjusted_prices_values = _roll_in_panama(
+                    adjusted_prices_values,
+                    str(previous_calendar.current_contract),
+                    previous_row,
+                    str(current_calendar.current_contract),
+                    current_row,
+                )
+
+            previous_calendar = copy(current_calendar)
+            previous_contract_prices = copy(current_contract_prices)
+            previous_row = copy(current_row)
 
     # it's ok to return a DataFrame since the calling object will change the
     # type
@@ -144,13 +148,10 @@ def _roll_in_panama(adjusted_prices_values, previous_contract, previous_row, cur
         )
 
     # We add the roll differential to all previous prices
-    volume = [row[VOLUME_COLUMN] for row in adjusted_prices_values]
-    adjusted_prices_values = [
-        adj_price + roll_differential for adj_price in adjusted_prices_values[NOT_VOLUME_COLUMNS]
-    ]
-    adjusted_prices_values = [
-        pd.concat([adjusted_prices_values[i], volume[i]], axis=1) for i in range(len(adjusted_prices_values))
-    ]
+    # volume = [row[VOLUME_COLUMN] for row in adjusted_prices_values]
+    for i in range(len(adjusted_prices_values)):
+        adjusted_prices_values[i][NOT_VOLUME_COLUMNS] += roll_differential
+
     # note this includes the price for the previous row, which will now be equal to the forward price
     # We now add todays price. This will be for the new contract
 

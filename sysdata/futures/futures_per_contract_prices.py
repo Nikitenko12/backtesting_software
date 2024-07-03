@@ -214,16 +214,16 @@ class futuresContractPriceData(baseData):
         :return: dictFuturesContractPrices
         """
 
-        list_of_contracts = (
-            self.contracts_with_price_data_at_frequency_for_instrument_code(
-                instrument_code=instrument_code, frequency=frequency
-            )
-        )
-        # list_of_contracts = listOfFuturesContracts([
-        #     futuresContract(instrument_code, '20240700'),
-        #     futuresContract(instrument_code, '20240800'),
-        #     futuresContract(instrument_code, '20240900'),
-        # ])
+        # list_of_contracts = (
+        #     self.contracts_with_price_data_at_frequency_for_instrument_code(
+        #         instrument_code=instrument_code, frequency=frequency
+        #     )
+        # )
+        list_of_contracts = listOfFuturesContracts([
+            futuresContract(instrument_code, '20240700'),
+            futuresContract(instrument_code, '20240800'),
+            futuresContract(instrument_code, '20240900'),
+        ])
         dict_of_prices = dictFuturesContractPrices(
             [
                 (
