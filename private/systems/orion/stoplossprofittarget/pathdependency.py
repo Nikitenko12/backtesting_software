@@ -86,12 +86,12 @@ class StopLossProfitTarget(SystemStage):
 
     @input
     def signals_dict(self, instrument_code: str):
-        return self.rules.get_raw_forecast(instrument_code)
+        return self.rules.get_raw_forecast(instrument_code, rule_variation_name='orion')
 
     @input
     def get_prices(self, instrument_code: str):
         return self.parent.rawdata.get_aggregated_minute_prices(
-            instrument_code, barsize=self.parent.rules.trading_rules.other_args['small_timeframe']
+            instrument_code, barsize=self.parent.config.trading_rules['orion']['other_args']['small_timeframe']
         )
 
 def get_signals_after_limit_price_is_hit(

@@ -16,7 +16,7 @@ class OrionRawData(SystemStage):
                 'OPEN': 'first',
                 'HIGH': 'max',
                 'LOW': 'min',
-                'LAST': 'last',
+                'FINAL': 'last',
                 'VOLUME': 'sum',
             }
         )
@@ -28,7 +28,7 @@ class OrionRawData(SystemStage):
             "Calculating minute prices for %s" % instrument_code,
             instrument_code=instrument_code,
         )
-        minuteprice = self.data_stage.minute_prices(instrument_code)
+        minuteprice = self.data_stage.get_backadjusted_futures_price(instrument_code)
 
         if len(minuteprice) == 0:
             raise Exception(
@@ -61,44 +61,44 @@ class OrionRawData(SystemStage):
             instrument_code=instrument_code, base_currency=base_currency
         )
 
-    @input
-    def get_daily_prices(self, instrument_code) -> pd.Series:
-        """
-        Gets daily prices
-
-        :param instrument_code: Instrument to get prices for
-        :type trading_rules: str
-
-        :returns: Tx1 pd.DataFrame
-
-        KEY OUTPUT
-        """
-        self.log.debug(
-            "Calculating daily prices for %s" % instrument_code,
-            instrument_code=instrument_code,
-        )
-        dailyprice = self.data_stage.daily_prices(instrument_code)
-
-        if len(dailyprice) == 0:
-            raise Exception(
-                "Data for %s not found! Remove from instrument list, or add to config.ignore_instruments"
-                % instrument_code
-            )
-
-        return dailyprice
-
-    @input
-    def get_natural_frequency_prices(self, instrument_code: str) -> pd.Series:
-        self.log.debug(
-            "Retrieving natural prices for %s" % instrument_code,
-            instrument_code=instrument_code,
-        )
-
-        natural_prices = self.data_stage.get_raw_price(instrument_code)
-
-        if len(natural_prices) == 0:
-            raise Exception(
-                "Data for %s not found! Remove from instrument list, or add to config.ignore_instruments"
-            )
-
-        return natural_prices
+    # @input
+    # def get_daily_prices(self, instrument_code) -> pd.DataFrame:
+    #     """
+    #     Gets daily prices
+    #
+    #     :param instrument_code: Instrument to get prices for
+    #     :type trading_rules: str
+    #
+    #     :returns: Tx1 pd.DataFrame
+    #
+    #     KEY OUTPUT
+    #     """
+    #     self.log.debug(
+    #         "Calculating daily prices for %s" % instrument_code,
+    #         instrument_code=instrument_code,
+    #     )
+    #     dailyprice = self.data_stage.daily_prices(instrument_code)
+    #
+    #     if len(dailyprice) == 0:
+    #         raise Exception(
+    #             "Data for %s not found! Remove from instrument list, or add to config.ignore_instruments"
+    #             % instrument_code
+    #         )
+    #
+    #     return dailyprice
+    #
+    # @input
+    # def get_natural_frequency_prices(self, instrument_code: str) -> pd.DataFrame:
+    #     self.log.debug(
+    #         "Retrieving natural prices for %s" % instrument_code,
+    #         instrument_code=instrument_code,
+    #     )
+    #
+    #     natural_prices = self.data_stage.get_raw_price(instrument_code)
+    #
+    #     if len(natural_prices) == 0:
+    #         raise Exception(
+    #             "Data for %s not found! Remove from instrument list, or add to config.ignore_instruments"
+    #         )
+    #
+    #     return natural_prices

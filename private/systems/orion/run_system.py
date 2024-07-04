@@ -5,7 +5,7 @@ from sysdata.sim.db_futures_sim_data import dbFuturesSimData
 from private.systems.orion.rawdata.rawdata import OrionRawData
 
 from private.systems.orion.rules.orion import orion
-from systems.forecasting import Rules
+from private.systems.orion.forecasting import OrionRules
 
 from private.systems.orion.stoplossprofittarget.pathdependency import StopLossProfitTarget
 
@@ -23,7 +23,7 @@ if __name__ == "__main__":
     orion_system = System(
         stage_list=[
             OrionRawData(),
-            Rules(),
+            OrionRules(),
             StopLossProfitTarget(),
             OrionPositionSizing(),
             OrionPortfolios(),

@@ -18,7 +18,7 @@ def orion(minute_bars: pd.DataFrame, big_timeframe='30T', small_timeframe='5T', 
             'OPEN': 'first',
             'HIGH': 'max',
             'LOW': 'min',
-            'LAST': 'last',
+            'FINAL': 'last',
             'VOLUME': 'sum',
         }
     )
@@ -27,7 +27,7 @@ def orion(minute_bars: pd.DataFrame, big_timeframe='30T', small_timeframe='5T', 
             'OPEN': 'first',
             'HIGH': 'max',
             'LOW': 'min',
-            'LAST': 'last',
+            'FINAL': 'last',
             'VOLUME': 'sum',
         }
     )
@@ -47,8 +47,8 @@ def orion(minute_bars: pd.DataFrame, big_timeframe='30T', small_timeframe='5T', 
     """
     eod.iloc[:-1] = datetime['SESSION'].iloc[:-1].lt(datetime['SESSION'].shift(-1).iloc[:-1])
     """
-    stop_looking_for_long_setup = (small_price_bars['CLOSE'] < long_zone['LOW']) | eod
-    stop_looking_for_short_setup = (small_price_bars['CLOSE'] > short_zone['HIGH']) | eod
+    stop_looking_for_long_setup = (small_price_bars['FINAL'] < long_zone['LOW']) | eod
+    stop_looking_for_short_setup = (small_price_bars['FINAL'] > short_zone['HIGH']) | eod
 
     fractals = rachel_t_fractals(small_price_bars)
     long_fractals = fractals < 0
@@ -56,8 +56,8 @@ def orion(minute_bars: pd.DataFrame, big_timeframe='30T', small_timeframe='5T', 
     long_fractal_prices = small_price_bars.loc[long_fractals, 'HIGH'].reindex_like(small_price_bars['HIGH'], method='ffill').shift(1)
     short_fractal_prices = small_price_bars.loc[short_fractals, 'LOW'].reindex_like(small_price_bars['LOW'], method='ffill').shift(1)
 
-    long_setup = small_price_bars['CLOSE'] > long_fractal_prices
-    short_setup = small_price_bars['CLOSE'] < short_fractal_prices
+    long_setup = small_price_bars['FINAL'] > long_fractal_prices
+    short_setup = small_price_bars['FINAL'] < short_fractal_prices
 
     long_setup_groups = small_price_bars.loc[small_price_bar_in_long_zone, 'HIGH'].reindex_like(small_price_bars['HIGH'], method='ffill')
     short_setup_groups = small_price_bars.loc[small_price_bar_in_short_zone, 'LOW'].reindex_like(small_price_bars['LOW'], method='ffill')
@@ -69,14 +69,14 @@ def orion(minute_bars: pd.DataFrame, big_timeframe='30T', small_timeframe='5T', 
         small_price_bars['HIGH'] == small_price_bars['HIGH'].groupby(short_setup_groups).cummax(), 'HIGH'
     ]
 
-    looking_for_long_setup = may_we_look_for_long_setup.reindex_like(small_price_bars['CLOSE']).mask(
+    looking_for_long_setup = may_we_look_for_long_setup.reindex_like(small_price_bars['FINAL']).mask(
         stop_looking_for_long_setup, False
     ).ffill()
     looking_for_long_setup = looking_for_long_setup & small_price_bar_in_long_zone
     looking_for_long_setup.loc[~looking_for_long_setup] = np.nan
     looking_for_long_setup = looking_for_long_setup.mask(stop_looking_for_long_setup, False).ffill()
 
-    looking_for_short_setup = may_we_look_for_short_setup.reindex_like(small_price_bars['CLOSE']).mask(
+    looking_for_short_setup = may_we_look_for_short_setup.reindex_like(small_price_bars['FINAL']).mask(
         stop_looking_for_short_setup, False
     ).ffill()
     looking_for_short_setup = looking_for_short_setup & small_price_bar_in_short_zone
@@ -217,8 +217,8 @@ def rachel_t_fractals(price_bars: pd.DataFrame):
         return ret
 
     tf = 240
-    higherhhigh = isTFFractal(1, price_bars, tf).where(hhll(price_bars)['hh']).reindex_like(price_bars['CLOSE']).fillna(False)  # Maroon above bar, offset=-2
-    lowerllow = isTFFractal(-1, price_bars, tf).where(hhll(price_bars)['ll']).reindex_like(price_bars['CLOSE']).fillna(False)   # Green below bar, offset=-2
+    higherhhigh = isTFFractal(1, price_bars, tf).where(hhll(price_bars)['hh']).reindex_like(price_bars['FINAL']).fillna(False)  # Maroon above bar, offset=-2
+    lowerllow = isTFFractal(-1, price_bars, tf).where(hhll(price_bars)['ll']).reindex_like(price_bars['FINAL']).fillna(False)   # Green below bar, offset=-2
 
     """
     
@@ -343,7 +343,7 @@ def rachel_t_fractals(price_bars: pd.DataFrame):
         _xad = (xad >= 2.000) & (xad <= 2.236)
         return _xab & _abc & _bcd & _xad & (d < c if _mode == 1 else d > c)
 
-    fractals = pd.Series(0).reindex_like(price_bars['CLOSE']).fillna(0)
+    fractals = pd.Series(0).reindex_like(price_bars['FINAL']).fillna(0)
     fractals.loc[
         isABCD(-1) | isBat(-1) | isAltBat(-1) | isButterfly(-1) | isGartley(-1) | isCrab(-1) | isShark(-1) | is5o(-1) | isWolf(-1) | isHnS(-1) | isConTria(-1) | isExpTria(-1)
     ] = -1
@@ -358,17 +358,18 @@ def bars_since(series: pd.Series):
     happened_this_bar = series.astype(int)
     happened_this_bar_cumsum = happened_this_bar.cumsum()
     barssince = happened_this_bar_cumsum.cummax().groupby(by=happened_this_bar_cumsum).cumcount()
-    barssince.loc[:happened_this_bar.index[series][0]] = 0
+    if any(happened_this_bar):
+        barssince.loc[:happened_this_bar.index[series][0]] = 0
 
     return barssince
 
 
 def look_for_long_setup(large_price_bars: pd.DataFrame, lookback: int) -> pd.Series:
-    return large_price_bars['CLOSE'].gt(large_price_bars['HIGH'].rolling(lookback).max().shift(1))
+    return large_price_bars['FINAL'].gt(large_price_bars['HIGH'].rolling(lookback).max().shift(1))
 
 
 def look_for_short_setup(large_price_bars: pd.DataFrame, lookback: int) -> pd.Series:
-    return large_price_bars['CLOSE'].lt(large_price_bars['LOW'].rolling(lookback).max().shift(1))
+    return large_price_bars['FINAL'].lt(large_price_bars['LOW'].rolling(lookback).max().shift(1))
 
 
 if __name__ == "__main__":
