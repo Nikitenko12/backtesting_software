@@ -41,6 +41,7 @@ class StopLossProfitTarget(SystemStage):
             short_profit_target_levels,
         )
 
+    @output()
     def get_signals_after_limit_price_is_hit_stop_loss_and_profit_target(self, instrument_code: str):
         (
             prices,
@@ -94,6 +95,7 @@ class StopLossProfitTarget(SystemStage):
             instrument_code, barsize=self.parent.config.trading_rules['orion']['other_args']['small_timeframe']
         )
 
+
 def get_signals_after_limit_price_is_hit(
     prices: pd.DataFrame,
     long_limit_prices: pd.Series,
@@ -108,7 +110,7 @@ def get_signals_after_limit_price_is_hit(
 
     # for each date in long/short signals, get limit price on that date.
     # See if prices hit limit price before a new zone is hit.
-    for dt, signal in new_signals.items():
+    for dt, signal in list(new_signals.items())[:-1]:
         if signal == 0:
             continue
         datetime_starting_from_next_bar = prices.index.to_series()
@@ -117,10 +119,16 @@ def get_signals_after_limit_price_is_hit(
         ).dropna()
         if signal > 0:
             limit_price = new_long_limit_prices.loc[dt]
-            dt_when_limit_price_was_hit = prices.loc[datetime_starting_from_next_bar, 'LOW'].le(limit_price).idxmax()
+            try:
+                dt_when_limit_price_was_hit = prices.loc[datetime_starting_from_next_bar, 'LOW'].le(limit_price).idxmax()
+            except ValueError:
+                dt_when_limit_price_was_hit = pd.NA
         else:
             limit_price = new_short_limit_prices.loc[dt]
-            dt_when_limit_price_was_hit = prices.loc[datetime_starting_from_next_bar, 'LOW'].ge(limit_price).idxmax()
+            try:
+                dt_when_limit_price_was_hit = prices.loc[datetime_starting_from_next_bar, 'LOW'].ge(limit_price).idxmax()
+            except ValueError:
+                dt_when_limit_price_was_hit = pd.NA
 
         if pd.isna(dt_when_limit_price_was_hit):   # Limit price was never hit
             continue
@@ -167,7 +175,7 @@ def apply_stop_loss_and_profit_target_to_signals(
 
     # get index where prices crossed stop loss and profit target for each trade
     datetime_when_price_crossed_sl_or_pt_for_trade = pd.Series(None).reindex_like(signals.loc[signals != 0].iloc[1:])
-    for dt, signal in (signals.loc[signals != 0].iloc[1:]).items():
+    for dt, signal in (signals.loc[signals != 0].iloc[1:-1]).items():
         datetime_starting_from_next_bar = prices.index.to_series()
         datetime_starting_from_next_bar = datetime_starting_from_next_bar.mask(
             datetime_starting_from_next_bar <= dt, np.nan
@@ -185,7 +193,7 @@ def apply_stop_loss_and_profit_target_to_signals(
     # at a certain date, get first trade (entry) where you would be in the market
     # get, for a certain signal, whether the prices hit stop loss or profit target on the previous signal's entry
     new_datetime_when_price_crossed_sl_or_pt_for_trade = datetime_when_price_crossed_sl_or_pt_for_trade.copy()
-    for i in range(1, len(datetime_when_price_crossed_sl_or_pt_for_trade)):
+    for i in range(1, len(datetime_when_price_crossed_sl_or_pt_for_trade)-1):
         if new_datetime_when_price_crossed_sl_or_pt_for_trade.loc[
             datetime_when_price_crossed_sl_or_pt_for_trade.index[i]
         ] <= (

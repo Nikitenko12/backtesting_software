@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 
 
@@ -63,7 +64,7 @@ class OrionPositionSizing(SystemStage):
         price = self.get_underlying_price(instrument_code)
         multiplier = self.rawdata_stage.get_value_of_block_price_move(instrument_code)
 
-        risk_currency = forecast.sign() * (price - stop_loss_level) * multiplier
+        risk_currency = np.sign(forecast) * (price['FINAL'] - stop_loss_level) * multiplier
         subsystem_position_raw = risk_per_trade_currency / risk_currency
         subsystem_position = self._apply_long_only_constraint_to_position(
             position=subsystem_position_raw, instrument_code=instrument_code
@@ -162,7 +163,7 @@ class OrionPositionSizing(SystemStage):
             instrument_code
         )
 
-        block_value = underlying_price.ffill() * value_of_price_move * 0.01
+        block_value = underlying_price['FINAL'].ffill() * value_of_price_move * 0.01
 
         return block_value
 
@@ -208,7 +209,7 @@ class OrionPositionSizing(SystemStage):
         try:
             rawdata = self.rawdata_stage
         except missingData:
-            underlying_price = self.data.daily_prices(instrument_code)
+            underlying_price = self.data.minute_prices(instrument_code)
         else:
             underlying_price = rawdata.daily_denominator_price(instrument_code)
 

@@ -36,6 +36,7 @@ class OrionRawData(SystemStage):
                 % instrument_code
             )
 
+        minuteprice = minuteprice.loc[minuteprice['FINAL'] != 0.0]
         return minuteprice
 
     @property
@@ -60,6 +61,24 @@ class OrionRawData(SystemStage):
         return self.data_stage.get_fx_for_instrument(
             instrument_code=instrument_code, base_currency=base_currency
         )
+
+    @output()
+    def daily_denominator_price(self, instrument_code: str) -> pd.DataFrame:
+        """
+        Gets daily prices for use with % volatility
+        This won't always be the same as the normal 'price'
+
+        :param instrument_code: Instrument to get prices for
+        :type trading_rules: str
+
+        :returns: Tx1 pd.DataFrame
+
+        """
+        self.log.warning(
+            "No carry data found for %s, using adjusted prices to calculate percentage returns"
+            % instrument_code
+        )
+        return self.get_minute_prices(instrument_code)
 
     # @input
     # def get_daily_prices(self, instrument_code) -> pd.DataFrame:
