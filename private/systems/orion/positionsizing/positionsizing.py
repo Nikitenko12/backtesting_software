@@ -66,6 +66,7 @@ class OrionPositionSizing(SystemStage):
 
         risk_currency = np.sign(forecast) * (price['FINAL'] - stop_loss_level) * multiplier
         subsystem_position_raw = risk_per_trade_currency / risk_currency
+        subsystem_position_raw.replace([np.inf, -np.inf], 0, inplace=True)
         subsystem_position = self._apply_long_only_constraint_to_position(
             position=subsystem_position_raw, instrument_code=instrument_code
         )

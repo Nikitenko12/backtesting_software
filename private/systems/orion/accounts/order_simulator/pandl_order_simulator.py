@@ -30,17 +30,14 @@ class OrdersSeriesData(object):
     def __init__(
         self, price_series: pd.Series, unrounded_positions: pd.Series,
         long_limit_price_series: pd.Series = None, short_limit_price_series: pd.Series = None,
-        long_profit_target_level_series: pd.Series = None, short_profit_target_level_series: pd.Series = None,
-        long_stop_loss_level_series: pd.Series = None, short_stop_loss_level_series: pd.Series = None,
+        profit_target_level_series: pd.Series = None, stop_loss_level_series: pd.Series = None,
     ):
         self.price_series = price_series
         self.unrounded_positions = unrounded_positions
         self.long_limit_price_series = long_limit_price_series
         self.short_limit_price_series = short_limit_price_series
-        self.long_profit_target_level_series = long_profit_target_level_series
-        self.short_profit_target_level_series = short_profit_target_level_series
-        self.long_stop_loss_level_series = long_stop_loss_level_series
-        self.short_stop_loss_level_series = short_stop_loss_level_series
+        self.profit_target_level_series = profit_target_level_series
+        self.stop_loss_level_series = stop_loss_level_series
 
 
 @dataclass

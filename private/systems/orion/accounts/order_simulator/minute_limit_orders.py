@@ -42,7 +42,7 @@ DataAtIDXPoint = namedtuple(
     "DataAtIDXPoint",
     [
         "current_optimal_position", "current_price", "next_price", "next_datetime", "long_limit_price", "short_limit_price",
-        "long_profit_target_level", "short_profit_target_level", "long_stop_loss_level", "short_stop_loss_level",
+        "profit_target_level", "stop_loss_level",
     ],
 )
 
@@ -76,19 +76,19 @@ def generate_order_and_fill_at_idx_point_for_limit_orders(
     market_price = current_price
     next_price = data_for_idx.next_price
     if current_position > 0 > quantity:   # Exiting long position
-        if current_price <= data_for_idx.long_stop_loss_level:
+        if current_price <= data_for_idx.stop_loss_level:
             limit_price = current_price
             fill_datetime = current_datetime
-        elif next_price >= data_for_idx.long_profit_target_level:
-            limit_price = data_for_idx.long_profit_target_level
+        elif next_price >= data_for_idx.profit_target_level:
+            limit_price = data_for_idx.profit_target_level
             market_price = next_price
 
     elif current_position < 0 < quantity: # Exiting short position
-        if current_price >= data_for_idx.short_stop_loss_level:
+        if current_price >= data_for_idx.stop_loss_level:
             limit_price = current_price
             fill_datetime = current_datetime
-        elif next_price <= data_for_idx.short_profit_target_level:
-            limit_price = data_for_idx.short_profit_target_level
+        elif next_price <= data_for_idx.profit_target_level:
+            limit_price = data_for_idx.profit_target_level
             market_price = next_price
 
     simple_order = SimpleOrderWithDate(
@@ -113,21 +113,17 @@ def get_order_sim_minute_data_at_idx_point(
     prices = series_data.price_series
     long_limit_prices = series_data.long_limit_price_series
     short_limit_prices = series_data.short_limit_price_series
-    long_profit_target_levels = series_data.long_profit_target_level_series
-    short_profit_target_levels = series_data.short_profit_target_level_series
-    long_stop_loss_levels = series_data.long_stop_loss_level_series
-    short_stop_loss_levels = series_data.short_stop_loss_level_series
+    profit_target_levels = series_data.profit_target_level_series
+    stop_loss_levels = series_data.stop_loss_level_series
 
-    current_optimal_position = unrounded_positions[idx]
-    next_price = prices[idx + 1]
-    current_price = prices[idx]
+    current_optimal_position = unrounded_positions.iloc[idx]
+    next_price = prices.iloc[idx + 1]
+    current_price = prices.iloc[idx]
     next_datetime = unrounded_positions.index[idx + 1]
-    long_limit_price = long_limit_prices[idx]
-    short_limit_price = short_limit_prices[idx]
-    long_profit_target_level = long_profit_target_levels[idx]
-    short_profit_target_level = short_profit_target_levels[idx]
-    long_stop_loss_level = long_stop_loss_levels[idx]
-    short_stop_loss_level = short_stop_loss_levels[idx]
+    long_limit_price = long_limit_prices.iloc[idx]
+    short_limit_price = short_limit_prices.iloc[idx]
+    profit_target_level = profit_target_levels.iloc[idx]
+    stop_loss_level = stop_loss_levels.iloc[idx]
 
     return DataAtIDXPoint(
         current_optimal_position=current_optimal_position,
@@ -136,10 +132,8 @@ def get_order_sim_minute_data_at_idx_point(
         current_price=current_price,
         long_limit_price=long_limit_price,
         short_limit_price=short_limit_price,
-        long_profit_target_level=long_profit_target_level,
-        short_profit_target_level=short_profit_target_level,
-        long_stop_loss_level=long_stop_loss_level,
-        short_stop_loss_level=short_stop_loss_level,
+        profit_target_level=profit_target_level,
+        stop_loss_level=stop_loss_level,
     )
 
 
