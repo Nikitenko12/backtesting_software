@@ -65,8 +65,11 @@ class OrionPositionSizing(SystemStage):
         multiplier = self.rawdata_stage.get_value_of_block_price_move(instrument_code)
 
         risk_currency = np.sign(forecast) * (price['FINAL'] - stop_loss_level) * multiplier
+        risk_currency.loc[forecast.values == forecast.shift(1).values] = np.nan
+
         subsystem_position_raw = risk_per_trade_currency / risk_currency
         subsystem_position_raw.replace([np.inf, -np.inf], 0, inplace=True)
+        subsystem_position_raw.ffill(inplace=True)
         subsystem_position = self._apply_long_only_constraint_to_position(
             position=subsystem_position_raw, instrument_code=instrument_code
         )
@@ -212,7 +215,9 @@ class OrionPositionSizing(SystemStage):
         except missingData:
             underlying_price = self.data.minute_prices(instrument_code)
         else:
-            underlying_price = rawdata.daily_denominator_price(instrument_code)
+            underlying_price = rawdata.get_aggregated_minute_prices(
+                instrument_code, barsize=self.parent.config.trading_rules['orion']['other_args']['small_timeframe']
+            )
 
         return underlying_price
 

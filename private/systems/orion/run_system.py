@@ -34,3 +34,11 @@ if __name__ == "__main__":
     )
 
     orion_portfolio = orion_system.accounts.portfolio()
+
+    import matplotlib.pyplot as plt
+
+    orion_portfolio.percent.curve().plot()
+    plt.show()
+
+    subsystem_position = orion_system.positionSize.get_subsystem_position('CL')
+
