@@ -289,11 +289,13 @@ class simData(baseData):
 
 
         """
-        start_date = self.start_date_for_data()
-
-        return self._get_fx_data_from_start_date(
+        start_date = self.start_date_for_data().replace(tzinfo=None)
+        fx_data = self._get_fx_data_from_start_date(
             currency1, currency2, start_date=start_date
         )
+        fx_data = fx_data.tz_localize(tz='utc')
+
+        return fx_data
 
     def _get_fx_data_from_start_date(
         self, currency1: str, currency2: str, start_date: datetime.datetime

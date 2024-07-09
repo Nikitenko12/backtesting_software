@@ -163,6 +163,7 @@ class pandlCalculationWithCashCostsAndFills(
         subsequent_dates = generate_equal_dates_within_year(year, rolls_per_year)
         all_dates = [first_date] + subsequent_dates
 
+        all_dates = [date.astimezone(datetime.UTC) for date in all_dates]
         list_of_average_holdings = []
         for date_index in range(len(subsequent_dates)):
             end_date = all_dates[date_index + 1]

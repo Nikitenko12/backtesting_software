@@ -80,6 +80,20 @@ class OrionRawData(SystemStage):
         )
         return self.get_minute_prices(instrument_code)
 
+    @diagnostic()
+    def rolls_per_year(self, instrument_code: str) -> int:
+        ## an input but we cache to avoid spamming with errors
+        try:
+            rolls_per_year = self.data_stage.get_rolls_per_year(instrument_code)
+        except:
+            self.log.warning(
+                "No roll data for %s, this is fine for spot instruments but not for futures"
+                % instrument_code
+            )
+            rolls_per_year = 0
+
+        return rolls_per_year
+
     # @input
     # def get_daily_prices(self, instrument_code) -> pd.DataFrame:
     #     """

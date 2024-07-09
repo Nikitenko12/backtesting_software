@@ -713,6 +713,8 @@ def generate_equal_dates_within_year(
         for period_count in range(number_of_dates)
     ]
 
+    all_dates = [date.astimezone(datetime.UTC) for date in all_dates]
+
     return all_dates
 
 
