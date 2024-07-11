@@ -204,12 +204,19 @@ def apply_stop_loss_and_profit_target_to_signals(
                 datetime_when_price_crossed_sl_or_pt_for_trade.index[i], inplace=True
             )
 
+    # Removing trades which entered before last trade exited
     new_datetime_when_price_crossed_sl_or_pt_for_trade = (
         new_datetime_when_price_crossed_sl_or_pt_for_trade.loc[
             new_datetime_when_price_crossed_sl_or_pt_for_trade.shift(1).lt(
                 new_datetime_when_price_crossed_sl_or_pt_for_trade.index.to_series()
             )
         ]
+    )
+
+    signals = signals.shift(-1)
+    new_datetime_when_price_crossed_sl_or_pt_for_trade = pd.Series(
+        data=new_datetime_when_price_crossed_sl_or_pt_for_trade.values,
+        index=signals.index.to_series().shift(1).loc[new_datetime_when_price_crossed_sl_or_pt_for_trade.index]
     )
 
     new_signals = signals.loc[new_datetime_when_price_crossed_sl_or_pt_for_trade.index].copy()
@@ -271,16 +278,40 @@ if __name__ == "__main__":
 
     from private.systems.orion.rules.orion import orion
 
-    big_price_bars = \
-    pd.read_csv(get_resolved_pathname('data') + '/COMEX_GC1!, 30.csv', index_col=[0], parse_dates=True)[
-        ['open', 'high', 'low', 'close']].rename(columns=dict(open="OPEN", high='HIGH', low='LOW', close='CLOSE'))
-    big_price_bars = big_price_bars.reindex(big_price_bars.index.astype(pd.DatetimeTZDtype(tz='EST')))
-    small_price_bars = \
-    pd.read_csv(get_resolved_pathname('data') + '/COMEX_GC1!, 5.csv', index_col=[0], parse_dates=True)[
-        ['open', 'high', 'low', 'close']].rename(columns=dict(open="OPEN", high='HIGH', low='LOW', close='CLOSE'))
-    small_price_bars = small_price_bars.reindex(small_price_bars.index.astype(pd.DatetimeTZDtype(tz='EST')))
+    # big_price_bars = \
+    # pd.read_csv(get_resolved_pathname('data') + '/COMEX_GC1!, 30.csv', index_col=[0], parse_dates=True)[
+    #     ['open', 'high', 'low', 'close']].rename(columns=dict(open="OPEN", high='HIGH', low='LOW', close='FINAL'))
+    # big_price_bars = big_price_bars.reindex(big_price_bars.index.astype(pd.DatetimeTZDtype(tz='EST')))
+    # small_price_bars = \
+    # pd.read_csv(get_resolved_pathname('data') + '/COMEX_GC1!, 5.csv', index_col=[0], parse_dates=True)[
+    #     ['open', 'high', 'low', 'close']].rename(columns=dict(open="OPEN", high='HIGH', low='LOW', close='FINAL'))
+    # small_price_bars = small_price_bars.reindex(small_price_bars.index.astype(pd.DatetimeTZDtype(tz='EST')))
 
-    orion_trades = orion(big_price_bars, small_price_bars)
+    from sysdata.sim.db_futures_sim_data import dbFuturesSimData
+
+    price_bars = dbFuturesSimData().get_backadjusted_futures_price('CL')
+    price_bars = price_bars.loc[price_bars['FINAL'] != 0.0]
+
+    small_price_bars = price_bars.resample('5T').agg(
+        {
+            'OPEN': 'first',
+            'HIGH': 'max',
+            'LOW': 'min',
+            'FINAL': 'last',
+            'VOLUME': 'sum',
+        }
+    )
+    big_price_bars = price_bars.resample('30T').agg(
+        {
+            'OPEN': 'first',
+            'HIGH': 'max',
+            'LOW': 'min',
+            'FINAL': 'last',
+            'VOLUME': 'sum',
+        }
+    )
+
+    orion_trades = orion(price_bars)
     signals = orion_trades['signals']
 
     # apds = [
@@ -292,7 +323,7 @@ if __name__ == "__main__":
     #     mpf.make_addplot(orion_trades['short_profit_taker'], type='line'),
     # ]
     # mpf.plot(
-    #     small_price_bars.rename(columns=dict(OPEN="Open", HIGH="High", LOW="Low", CLOSE="Close")),
+    #     small_price_bars.rename(columns=dict(OPEN="Open", HIGH="High", LOW="Low", FINAL="Close")),
     #     type='candle',
     #     show_nontrading=False,
     #     addplot=apds,
@@ -347,7 +378,7 @@ if __name__ == "__main__":
         ),
     ]
     mpf.plot(
-        small_price_bars.rename(columns=dict(OPEN="Open", HIGH="High", LOW="Low", CLOSE="Close")),
+        small_price_bars.rename(columns=dict(OPEN="Open", HIGH="High", LOW="Low", FINAL="Close")),
         type='candle',
         show_nontrading=False,
         addplot=new_apds,

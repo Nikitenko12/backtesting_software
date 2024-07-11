@@ -50,6 +50,7 @@ if __name__ == "__main__":
     forecast_after_slpt_dict['forecasts'].plot()
     plt.show()
 
+    import numpy as np
     import mplfinance as mpf
 
     small_price_bars = orion_system.rawdata.get_aggregated_minute_prices(
@@ -115,7 +116,10 @@ if __name__ == "__main__":
         addplot=new_apds,
     )
 
-    from private.systems.orion.stoplossprofittarget.pathdependency import get_signals_after_limit_price_is_hit
+    from private.systems.orion.stoplossprofittarget.pathdependency import (
+        get_signals_after_limit_price_is_hit,
+        apply_stop_loss_and_profit_target_to_signals,
+    )
 
     signals_after_limit_price_is_hit_dict = get_signals_after_limit_price_is_hit(
         prices=small_price_bars,
@@ -126,7 +130,16 @@ if __name__ == "__main__":
         short_zones=orion_trades['short_zones'],
     )
 
-
+    signals_after_slpt_dict = apply_stop_loss_and_profit_target_to_signals(
+        prices=small_price_bars,
+        signals=signals_after_limit_price_is_hit_dict['signals'],
+        long_stop_loss_levels=orion_trades['long_stop_loss_prices'],
+        short_stop_loss_levels=orion_trades['short_stop_loss_prices'],
+        long_profit_target_levels=orion_trades['long_profit_taker'],
+        short_profit_target_levels=orion_trades['short_profit_taker'],
+        long_limit_prices=signals_after_limit_price_is_hit_dict['new_long_limit_prices'],
+        short_limit_prices=signals_after_limit_price_is_hit_dict['new_short_limit_prices'],
+    )
 
 
 
