@@ -42,3 +42,91 @@ if __name__ == "__main__":
 
     subsystem_position = orion_system.positionSize.get_subsystem_position('CL')
 
+    forecast_dict = orion_system.rules.get_raw_forecast('CL', 'orion')
+
+    forecast_after_slpt_dict = orion_system.pathdependency.get_signals_after_limit_price_is_hit_stop_loss_and_profit_target('CL')
+
+    plt.figure()
+    forecast_after_slpt_dict['forecasts'].plot()
+    plt.show()
+
+    import mplfinance as mpf
+
+    small_price_bars = orion_system.rawdata.get_aggregated_minute_prices(
+        'CL', barsize=orion_system.config.trading_rules['orion']['other_args']['small_timeframe']
+    )
+    big_price_bars = orion_system.rawdata.get_aggregated_minute_prices(
+        'CL', barsize=orion_system.config.trading_rules['orion']['other_args']['big_timeframe']
+    )
+
+    orion_trades = forecast_dict.copy()
+    signals = orion_trades['signals']
+
+    # apds = [
+    #     mpf.make_addplot(small_price_bars['LOW'].where(signals > 0, np.nan), type='scatter', marker='^'),
+    #     mpf.make_addplot(small_price_bars['HIGH'].where(signals < 0, np.nan), type='scatter', marker='v'),
+    #     mpf.make_addplot(orion_trades['long_stop_loss_prices'], type='line'),
+    #     mpf.make_addplot(orion_trades['long_profit_taker'], type='line'),
+    #     mpf.make_addplot(orion_trades['short_stop_loss_prices'], type='line'),
+    #     mpf.make_addplot(orion_trades['short_profit_taker'], type='line'),
+    # ]
+    # mpf.plot(
+    #     small_price_bars.rename(columns=dict(OPEN="Open", HIGH="High", LOW="Low", FINAL="Close")),
+    #     type='candle',
+    #     show_nontrading=False,
+    #     addplot=apds,
+    # )
+
+    new_orion_trades = forecast_after_slpt_dict.copy()
+    new_signals = new_orion_trades['forecasts']
+
+    where_values = new_orion_trades['long_limit_prices_after_slpt'].add(
+        new_orion_trades['short_limit_prices_after_slpt'], fill_value=0)
+    new_apds = [
+        mpf.make_addplot(small_price_bars['LOW'].where(new_signals > 0, np.nan), type='scatter', marker='^'),
+        mpf.make_addplot(small_price_bars['HIGH'].where(new_signals < 0, np.nan), type='scatter', marker='v'),
+        mpf.make_addplot(new_orion_trades['long_limit_prices_after_slpt'], type='line', color='blue'),
+        mpf.make_addplot(new_orion_trades['short_limit_prices_after_slpt'], type='line', color='blue'),
+        mpf.make_addplot(
+            new_orion_trades['stop_loss_levels_after_slpt'], type='line', color='maroon',
+            fill_between=dict(
+                y1=new_orion_trades['stop_loss_levels_after_slpt'].values,
+                y2=where_values.values,
+                where=~(where_values.isna()).values,
+                alpha=0.5,
+                color='red'
+            )
+        ),
+        mpf.make_addplot(
+            new_orion_trades['profit_target_levels_after_slpt'], type='line', color='green',
+            fill_between=dict(
+                y1=new_orion_trades['profit_target_levels_after_slpt'].values,
+                y2=where_values.values,
+                where=~(where_values.isna()).values,
+                alpha=0.5,
+                color='green'
+            )
+        ),
+    ]
+    mpf.plot(
+        small_price_bars.rename(columns=dict(OPEN="Open", HIGH="High", LOW="Low", FINAL="Close")),
+        type='candle',
+        show_nontrading=False,
+        addplot=new_apds,
+    )
+
+    from private.systems.orion.stoplossprofittarget.pathdependency import get_signals_after_limit_price_is_hit
+
+    signals_after_limit_price_is_hit_dict = get_signals_after_limit_price_is_hit(
+        prices=small_price_bars,
+        long_limit_prices=orion_trades['long_limit_prices'],
+        short_limit_prices=orion_trades['short_limit_prices'],
+        signals=orion_trades['signals'],
+        long_zones=orion_trades['long_zones'],
+        short_zones=orion_trades['short_zones'],
+    )
+
+
+
+
+
