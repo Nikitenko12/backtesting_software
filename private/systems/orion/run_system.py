@@ -128,15 +128,19 @@ if __name__ == "__main__":
         signals=orion_trades['signals'],
         long_zones=orion_trades['long_zones'],
         short_zones=orion_trades['short_zones'],
+        long_stop_loss_levels=orion_trades['long_stop_loss_prices'],
+        short_stop_loss_levels=orion_trades['short_stop_loss_prices'],
+        long_profit_target_levels=orion_trades['long_profit_taker'],
+        short_profit_target_levels=orion_trades['short_profit_taker'],
     )
 
     signals_after_slpt_dict = apply_stop_loss_and_profit_target_to_signals(
         prices=small_price_bars,
         signals=signals_after_limit_price_is_hit_dict['signals'],
-        long_stop_loss_levels=orion_trades['long_stop_loss_prices'],
-        short_stop_loss_levels=orion_trades['short_stop_loss_prices'],
-        long_profit_target_levels=orion_trades['long_profit_taker'],
-        short_profit_target_levels=orion_trades['short_profit_taker'],
+        long_stop_loss_levels=signals_after_limit_price_is_hit_dict['new_long_stop_loss_levels'],
+        short_stop_loss_levels=signals_after_limit_price_is_hit_dict['new_short_stop_loss_levels'],
+        long_profit_target_levels=signals_after_limit_price_is_hit_dict['new_long_profit_target_levels'],
+        short_profit_target_levels=signals_after_limit_price_is_hit_dict['new_short_profit_target_levels'],
         long_limit_prices=signals_after_limit_price_is_hit_dict['new_long_limit_prices'],
         short_limit_prices=signals_after_limit_price_is_hit_dict['new_short_limit_prices'],
     )

@@ -1,5 +1,5 @@
-from systems.accounts.curves.account_curve import accountCurve
-from systems.accounts.pandl_calculators.pandl_calculation_dict import (
+from private.systems.orion.accounts.curves.account_curve import accountCurve
+from private.systems.orion.accounts.pandl_calculators.pandl_calculation_dict import (
     dictOfPandlCalculatorsWithGenericCosts,
     pandlCalculationWithoutPositions,
 )

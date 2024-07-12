@@ -3,14 +3,14 @@ import pandas as pd
 
 from syscore.dateutils import Frequency
 
-from systems.accounts.curves.account_curve import accountCurve
-from systems.accounts.curves.dict_of_account_curves import dictOfAccountCurves
-from systems.accounts.pandl_calculators.pandl_generic_costs import (
+from private.systems.orion.accounts.curves.account_curve import accountCurve
+from private.systems.orion.accounts.curves.dict_of_account_curves import dictOfAccountCurves
+from private.systems.orion.accounts.pandl_calculators.pandl_generic_costs import (
     GROSS_CURVE,
     NET_CURVE,
     COSTS_CURVE,
 )
-from systems.accounts.curves.stats_dict import statsDict
+from private.systems.orion.accounts.curves.stats_dict import statsDict
 
 
 class accountCurveGroup(accountCurve):

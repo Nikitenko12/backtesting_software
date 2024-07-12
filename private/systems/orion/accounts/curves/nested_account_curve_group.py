@@ -1,9 +1,9 @@
-from systems.accounts.curves.account_curve_group import accountCurveGroup
-from systems.accounts.curves.dict_of_account_curves import nestedDictOfAccountCurves
+from private.systems.orion.accounts.curves.account_curve_group import accountCurveGroup
+from private.systems.orion.accounts.curves.dict_of_account_curves import nestedDictOfAccountCurves
 
 from syscore.dateutils import Frequency
 
-from systems.accounts.pandl_calculators.pandl_generic_costs import (
+from private.systems.orion.accounts.pandl_calculators.pandl_generic_costs import (
     NET_CURVE,
     GROSS_CURVE,
     COSTS_CURVE,

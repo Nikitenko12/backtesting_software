@@ -954,14 +954,14 @@ if __name__ == "__main__":
             }
         ),
         contract_map={
-            # "NQ": {"code": "NQ", "cycle": "FGHJKMNQUVXZ", "exchange": "CME"},
+            "NQ": {"code": "NQ", "cycle": "HMUZ", "exchange": "CME"},
             # "ES": {"code": "ES", "cycle": "FGHJKMNQUVXZ", "exchange": "CME"},
-            "CL": {"code": "CL", "cycle": "FGHJKMNQUVXZ", "exchange": "NYMEX"},
+            # "CL": {"code": "CL", "cycle": "FGHJKMNQUVXZ", "exchange": "NYMEX"},
             # "GC": {"code": "GC", "cycle": "FGHJKMNQUVXZ", "exchange": "COMEX"},
         },
         save_dir=get_resolved_pathname('sysinit.futures.bcutils.data'),
-        start_year=2000,
-        end_year=2015,
+        start_year=2014,
+        end_year=2025,
         dry_run=False,
         do_daily=False,
     )

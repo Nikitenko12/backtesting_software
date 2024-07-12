@@ -8,10 +8,10 @@ from syscore.pandas.strategy_functions import calculate_cost_deflator, years_in_
 from syscore.dateutils import generate_equal_dates_within_year
 from syscore.genutils import flatten_list
 
-from systems.accounts.pandl_calculators.pandl_generic_costs import (
+from private.systems.orion.accounts.pandl_calculators.pandl_generic_costs import (
     pandlCalculationWithGenericCosts,
 )
-from systems.accounts.pandl_calculators.pandl_using_fills import (
+from private.systems.orion.accounts.pandl_calculators.pandl_using_fills import (
     pandlCalculationWithFills,
 )
 

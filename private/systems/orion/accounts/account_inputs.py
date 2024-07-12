@@ -18,7 +18,7 @@ class accountInputs(SystemStage):
         self, instrument_code: str, position_or_forecast: pd.Series = arg_not_supplied
     ) -> pd.Series:
         if position_or_forecast is arg_not_supplied:
-            return self.get_daily_prices(instrument_code)
+            return self.get_minute_prices(instrument_code)
 
         instrument_prices = (
             self.instrument_prices_for_position_or_forecast_infer_frequency(

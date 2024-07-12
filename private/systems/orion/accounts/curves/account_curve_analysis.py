@@ -2,7 +2,7 @@ import pandas as pd
 from typing import Union, NamedTuple
 from scipy.stats import ttest_rel
 
-from systems.accounts.curves.account_curve import accountCurve
+from private.systems.orion.accounts.curves.account_curve import accountCurve
 
 
 class AccountTTestResult(NamedTuple):

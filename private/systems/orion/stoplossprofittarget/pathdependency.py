@@ -63,14 +63,18 @@ class StopLossProfitTarget(SystemStage):
             signals=signals,
             long_zones=long_zones,
             short_zones=short_zones,
-        )
-        updated_signals_dict = apply_stop_loss_and_profit_target_to_signals(
-            prices=prices,
-            signals=signals_after_limit_prices['signals'],
             long_stop_loss_levels=long_stop_loss_levels,
             short_stop_loss_levels=short_stop_loss_levels,
             long_profit_target_levels=long_profit_target_levels,
             short_profit_target_levels=short_profit_target_levels,
+        )
+        updated_signals_dict = apply_stop_loss_and_profit_target_to_signals(
+            prices=prices,
+            signals=signals_after_limit_prices['signals'],
+            long_stop_loss_levels=signals_after_limit_prices['new_long_stop_loss_levels'],
+            short_stop_loss_levels=signals_after_limit_prices['new_short_stop_loss_levels'],
+            long_profit_target_levels=signals_after_limit_prices['new_long_profit_target_levels'],
+            short_profit_target_levels=signals_after_limit_prices['new_short_profit_target_levels'],
             long_limit_prices=signals_after_limit_prices['new_long_limit_prices'],
             short_limit_prices=signals_after_limit_prices['new_short_limit_prices'],
         )
@@ -102,14 +106,23 @@ def get_signals_after_limit_price_is_hit(
     signals: pd.Series,
     long_zones: pd.DataFrame,
     short_zones: pd.DataFrame,
+    long_stop_loss_levels: pd.Series,
+    short_stop_loss_levels: pd.Series,
+    long_profit_target_levels: pd.Series,
+    short_profit_target_levels: pd.Series,
 ):
     new_signals = signals.copy() # shift(1)
     new_long_limit_prices = long_limit_prices.copy()
     new_short_limit_prices = short_limit_prices.copy()
+    new_long_stop_loss_levels = long_stop_loss_levels.copy()
+    new_short_stop_loss_levels = short_stop_loss_levels.copy()
+    new_long_profit_target_levels = long_profit_target_levels.copy()
+    new_short_profit_target_levels = short_profit_target_levels.copy()
 
     # for each date in long/short signals, get limit price on that date.
     # See if prices hit limit price before a new zone is hit.
-    for dt, signal in list(new_signals.items())[:-1]:
+    it = iter(list(new_signals.items())[:-1])
+    for dt, signal in it:
         if signal == 0:
             continue
         datetime_starting_from_next_bar = prices.index.to_series()
@@ -145,17 +158,48 @@ def get_signals_after_limit_price_is_hit(
                 zone_to_be_hit
             ).idxmax()
 
-        if dt_when_zone_was_hit < dt_when_limit_price_was_hit:
+        if dt_when_zone_was_hit < dt_when_limit_price_was_hit:  # Did not enter trade
             new_signals[dt] = 0
             if signal > 0:
                 new_long_limit_prices[dt] = np.nan
             else:
                 new_short_limit_prices[dt] = np.nan
+        else:   # Entered trade at dt_when_limit_price_was_hit
+            new_signals[dt:dt_when_limit_price_was_hit] = 0
+            new_signals[dt_when_limit_price_was_hit] = signal
+
+            if signal > 0:
+                new_long_limit_prices[dt:dt_when_limit_price_was_hit] = np.nan
+                new_long_limit_prices[dt_when_limit_price_was_hit] = limit_price
+
+                new_long_stop_loss_levels[dt_when_limit_price_was_hit] = new_long_stop_loss_levels[dt]
+                new_long_stop_loss_levels[dt:dt_when_limit_price_was_hit] = np.nan
+
+                new_long_profit_target_levels[dt_when_limit_price_was_hit] = new_long_profit_target_levels[dt]
+                new_long_profit_target_levels[dt:dt_when_limit_price_was_hit] = np.nan
+            else:
+                new_short_limit_prices[dt:dt_when_limit_price_was_hit] = np.nan
+                new_short_limit_prices[dt_when_limit_price_was_hit] = limit_price
+
+                new_short_stop_loss_levels[dt_when_limit_price_was_hit] = new_short_stop_loss_levels[dt]
+                new_short_stop_loss_levels[dt:dt_when_limit_price_was_hit] = np.nan
+
+                new_short_profit_target_levels[dt_when_limit_price_was_hit] = new_short_profit_target_levels[dt]
+                new_short_profit_target_levels[dt:dt_when_limit_price_was_hit] = np.nan
+
+            for _ in prices.loc[dt:dt_when_limit_price_was_hit].index:
+                next(it)
+            next(it)
+
 
     return dict(
         signals=new_signals,
         new_long_limit_prices=new_long_limit_prices,
         new_short_limit_prices=new_short_limit_prices,
+        new_long_stop_loss_levels=new_long_stop_loss_levels,
+        new_short_stop_loss_levels=new_short_stop_loss_levels,
+        new_long_profit_target_levels=new_long_profit_target_levels,
+        new_short_profit_target_levels=new_short_profit_target_levels,
     )
 
 
@@ -336,15 +380,19 @@ if __name__ == "__main__":
         short_limit_prices=orion_trades['short_limit_prices'],
         long_zones=orion_trades['long_zones'],
         short_zones=orion_trades['short_zones'],
+        long_stop_loss_levels=orion_trades['long_stop_loss_prices'],
+        short_stop_loss_levels=orion_trades['short_stop_loss_prices'],
+        long_profit_target_levels=orion_trades['long_profit_taker'],
+        short_profit_target_levels=orion_trades['short_profit_taker'],
     )
 
     new_orion_trades = apply_stop_loss_and_profit_target_to_signals(
         prices=small_price_bars,
         signals=orion_trades_which_hit_limit_prices['signals'],
-        long_stop_loss_levels=orion_trades['long_stop_loss_prices'],
-        short_stop_loss_levels=orion_trades['short_stop_loss_prices'],
-        long_profit_target_levels=orion_trades['long_profit_taker'],
-        short_profit_target_levels=orion_trades['short_profit_taker'],
+        long_stop_loss_levels=orion_trades_which_hit_limit_prices['new_long_stop_loss_levels'],
+        short_stop_loss_levels=orion_trades_which_hit_limit_prices['new_short_stop_loss_levels'],
+        long_profit_target_levels=orion_trades_which_hit_limit_prices['new_long_profit_target_levels'],
+        short_profit_target_levels=orion_trades_which_hit_limit_prices['new_short_profit_target_levels'],
         long_limit_prices=orion_trades_which_hit_limit_prices['new_long_limit_prices'],
         short_limit_prices=orion_trades_which_hit_limit_prices['new_short_limit_prices'],
     )
