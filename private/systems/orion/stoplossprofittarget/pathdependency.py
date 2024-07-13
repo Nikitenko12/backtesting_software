@@ -138,7 +138,7 @@ def get_signals_after_limit_price_is_hit(
         else:
             limit_price = new_short_limit_prices.loc[dt]
             try:
-                dt_when_limit_price_was_hit = prices.loc[datetime_starting_from_next_bar, 'LOW'].ge(limit_price).idxmax()
+                dt_when_limit_price_was_hit = prices.loc[datetime_starting_from_next_bar, 'HIGH'].ge(limit_price).idxmax()
             except ValueError:
                 dt_when_limit_price_was_hit = pd.NA
 
@@ -148,7 +148,7 @@ def get_signals_after_limit_price_is_hit(
         if signal > 0:
             zone_to_be_hit = long_zones.loc[datetime_starting_from_next_bar.loc[:dt_when_limit_price_was_hit], 'HIGH'].cummax()
             dt_when_zone_was_hit = prices.loc[
-                datetime_starting_from_next_bar.loc[:dt_when_limit_price_was_hit], 'LOW'].le(
+                datetime_starting_from_next_bar.loc[:dt_when_limit_price_was_hit], 'LOW'].le(   ## FIXME (dt_when_limit_price_was_hit + 1)??
                 zone_to_be_hit
             ).idxmax()
         else:
@@ -189,8 +189,6 @@ def get_signals_after_limit_price_is_hit(
 
             for _ in prices.loc[dt:dt_when_limit_price_was_hit].index:
                 next(it)
-            next(it)
-
 
     return dict(
         signals=new_signals,
@@ -257,11 +255,11 @@ def apply_stop_loss_and_profit_target_to_signals(
         ]
     )
 
-    signals = signals.shift(-1)
-    new_datetime_when_price_crossed_sl_or_pt_for_trade = pd.Series(
-        data=new_datetime_when_price_crossed_sl_or_pt_for_trade.values,
-        index=signals.index.to_series().shift(1).loc[new_datetime_when_price_crossed_sl_or_pt_for_trade.index]
-    )
+    # signals = signals.shift(-1)
+    # new_datetime_when_price_crossed_sl_or_pt_for_trade = pd.Series(
+    #     data=new_datetime_when_price_crossed_sl_or_pt_for_trade.values,
+    #     index=signals.index.to_series().shift(1).loc[new_datetime_when_price_crossed_sl_or_pt_for_trade.index]
+    # )
 
     new_signals = signals.loc[new_datetime_when_price_crossed_sl_or_pt_for_trade.index].copy()
     new_signals = new_signals.reindex_like(signals)
@@ -426,7 +424,7 @@ if __name__ == "__main__":
         ),
     ]
     mpf.plot(
-        small_price_bars.rename(columns=dict(OPEN="Open", HIGH="High", LOW="Low", FINAL="Close")),
+        small_price_bars[['OPEN', 'HIGH', 'LOW', 'FINAL']].rename(columns=dict(OPEN="Open", HIGH="High", LOW="Low", FINAL="Close")),
         type='candle',
         show_nontrading=False,
         addplot=new_apds,

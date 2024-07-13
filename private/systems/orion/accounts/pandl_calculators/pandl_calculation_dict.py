@@ -70,7 +70,7 @@ class dictOfPandlCalculatorsWithGenericCosts(dict):
         pandl_calculator = pandlCalculationWithoutPositions(
             pandl_in_base_currency=pandl_in_base_currency,
             costs_pandl_in_base_currency=costs_pandl_in_base_currency,
-            capital=pd.Series(capital, index=pandl_in_base_currency.index),
+            capital=pd.Series(capital, index=pd.DatetimeIndex(pandl_in_base_currency.index)),
         )
 
         return pandl_calculator

@@ -11,7 +11,7 @@ class pandlCalculation(object):
         price: pd.Series,
         positions: pd.Series = arg_not_supplied,
         fx: pd.Series = arg_not_supplied,
-        capital: pd.Series = arg_not_supplied,
+        capital: pd.Series | float | int = arg_not_supplied,
         value_per_point: float = 1.0,
         roundpositions=False,
         delayfill=False,
@@ -20,7 +20,10 @@ class pandlCalculation(object):
         self._price = price
         self._positions = positions
         self._fx = fx
-        self._capital = capital
+        if isinstance(capital, float) or isinstance(capital, int):
+            self._capital = pd.Series(capital, index=pd.DatetimeIndex(price.index)),
+        else:
+            self._capital = capital
         self._value_per_point = value_per_point
         self._passed_diagnostic_df = passed_diagnostic_df
         self._delayfill = delayfill
