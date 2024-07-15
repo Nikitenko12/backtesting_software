@@ -188,7 +188,10 @@ def get_signals_after_limit_price_is_hit(
                 new_short_profit_target_levels[dt:dt_when_limit_price_was_hit] = np.nan
 
             for _ in prices.loc[dt:dt_when_limit_price_was_hit].index:
-                next(it)
+                try:
+                    next(it)
+                except StopIteration:
+                    break
 
     return dict(
         signals=new_signals,
@@ -219,7 +222,7 @@ def apply_stop_loss_and_profit_target_to_signals(
     for dt, signal in (signals.loc[signals != 0].iloc[1:-1]).items():
         datetime_starting_from_next_bar = prices.index.to_series()
         datetime_starting_from_next_bar = datetime_starting_from_next_bar.mask(
-            datetime_starting_from_next_bar <= dt, np.nan
+            datetime_starting_from_next_bar <= dt, pd.NaT
         ).dropna()
         datetime_when_price_crossed_sl_or_pt_for_trade.loc[dt] = (
             (prices.loc[datetime_starting_from_next_bar, 'HIGH'].ge(long_profit_target_levels.loc[dt]) | (
@@ -233,6 +236,7 @@ def apply_stop_loss_and_profit_target_to_signals(
 
     # at a certain date, get first trade (entry) where you would be in the market
     # get, for a certain signal, whether the prices hit stop loss or profit target on the previous signal's entry
+    datetime_when_price_crossed_sl_or_pt_for_trade.dropna(inplace=True)
     new_datetime_when_price_crossed_sl_or_pt_for_trade = datetime_when_price_crossed_sl_or_pt_for_trade.copy()
     for i in range(1, len(datetime_when_price_crossed_sl_or_pt_for_trade)-1):
         if new_datetime_when_price_crossed_sl_or_pt_for_trade.loc[

@@ -8,6 +8,7 @@ trading_rules:
      function: private.systems.orion.rules.orion.orion
      data:
          - "rawdata.get_minute_prices"
+         - "rawdata.get_sessions"
      other_args:
          big_timeframe: '30T'
          small_timeframe: '5T'

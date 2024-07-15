@@ -10,6 +10,7 @@ from sysdata.csv.csv_spot_fx import csvFxPricesData
 from sysdata.csv.csv_instrument_data import csvFuturesInstrumentData
 from sysdata.csv.csv_roll_parameters import csvRollParametersData
 from sysdata.csv.csv_spread_costs import csvSpreadCostData
+from sysdata.csv.csv_sessions import csvSessionsData
 
 from sysdata.data_blob import dataBlob
 from sysdata.sim.futures_sim_data_with_data_blob import genericBlobUsingFuturesSimData
@@ -35,6 +36,7 @@ class csvFuturesSimData(genericBlobUsingFuturesSimData):
                 csvFxPricesData,
                 csvRollParametersData,
                 csvSpreadCostData,
+                csvSessionsData,
             ],
         )
 

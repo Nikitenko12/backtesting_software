@@ -954,8 +954,8 @@ if __name__ == "__main__":
             }
         ),
         contract_map={
-            "NQ": {"code": "NQ", "cycle": "HMUZ", "exchange": "CME"},
-            # "ES": {"code": "ES", "cycle": "FGHJKMNQUVXZ", "exchange": "CME"},
+            # "NQ": {"code": "NQ", "cycle": "HMUZ", "exchange": "CME"},
+            "ES": {"code": "ES", "cycle": "HMUZ", "exchange": "CME"},
             # "CL": {"code": "CL", "cycle": "FGHJKMNQUVXZ", "exchange": "NYMEX"},
             # "GC": {"code": "GC", "cycle": "FGHJKMNQUVXZ", "exchange": "COMEX"},
         },

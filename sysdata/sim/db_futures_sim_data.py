@@ -11,6 +11,7 @@ from sysdata.influxdb.influx_spotfx_prices import influxFxPricesData
 from sysdata.csv.csv_instrument_data import csvFuturesInstrumentData
 from sysdata.csv.csv_roll_parameters import csvRollParametersData
 from sysdata.csv.csv_spread_costs import csvSpreadCostData
+from sysdata.csv.csv_sessions import csvSessionsData
 from sysdata.data_blob import dataBlob
 from sysdata.sim.futures_sim_data_with_data_blob import genericBlobUsingFuturesSimData
 
@@ -34,6 +35,7 @@ class dbFuturesSimData(genericBlobUsingFuturesSimData):
                     get_class_for_data_type(FUTURES_INSTRUMENT_DATA),
                     get_class_for_data_type(ROLL_PARAMETERS_DATA),
                     get_class_for_data_type(STORED_SPREAD_DATA),
+                    get_class_for_data_type(SESSIONS_DATA)
                 ],
             )
 
@@ -51,6 +53,7 @@ FX_DATA = "fx_data"
 ROLL_PARAMETERS_DATA = "roll_parameters_data"
 FUTURES_INSTRUMENT_DATA = "futures_instrument_data"
 STORED_SPREAD_DATA = "stored_spread_data"
+SESSIONS_DATA = "sessions_data"
 
 
 def get_class_for_data_type(data_type: str):
@@ -63,6 +66,7 @@ use_sim_classes = {
     FUTURES_INSTRUMENT_DATA: csvFuturesInstrumentData,
     FUTURES_ADJUSTED_PRICE_DATA: influxFuturesAdjustedPricesData,
     STORED_SPREAD_DATA: csvSpreadCostData,
+    SESSIONS_DATA: csvSessionsData,
 }
 
 

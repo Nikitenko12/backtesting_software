@@ -9,10 +9,12 @@ If current 30min candle closes above the highest_of(10 previous 30min candles' h
 import pandas as pd
 import numpy as np
 
+from sysobjects.sessions import Session
+
 VERY_BIG_NUMBER = 99999999999999999
 
 
-def orion(minute_bars: pd.DataFrame, big_timeframe='30T', small_timeframe='5T', setup_lookback=10, rr=2.0):
+def orion(minute_bars: pd.DataFrame, sessions: Session, big_timeframe='30T', small_timeframe='5T', setup_lookback=10, rr=2.0):
     big_price_bars = minute_bars.resample(big_timeframe).agg(
         {
             'OPEN': 'first',
@@ -41,12 +43,15 @@ def orion(minute_bars: pd.DataFrame, big_timeframe='30T', small_timeframe='5T', 
     small_price_bar_in_long_zone = (long_zone['LOW'] < small_price_bars['LOW']) & (small_price_bars['LOW'] < long_zone['HIGH'])
     small_price_bar_in_short_zone = (short_zone['HIGH'] > small_price_bars['HIGH']) & (small_price_bars['HIGH'] > short_zone['LOW'])
 
+
     datetime = pd.Series(list(small_price_bars.index), index=small_price_bars.index)
+
     eod = pd.Series(False).reindex_like(datetime).fillna(False)
+    """
     eod.iloc[:-1] = datetime.apply(lambda x: x.date()).iloc[:-1].lt(datetime.shift(-1).iloc[:-1].apply(lambda x: x.date()))     # FIXME add sessions, this is incorrect since sessions start the day before
     """
-    eod.iloc[:-1] = datetime['SESSION'].iloc[:-1].lt(datetime['SESSION'].shift(-1).iloc[:-1])
-    """
+    eod.iloc[:-1] = (datetime.apply(lambda x: x.time()).iloc[:-1] <= sessions.end_time) & (datetime.apply(lambda x: x.time()).shift(-1).iloc[:-1] >= sessions.start_time)
+
     stop_looking_for_long_setup = (small_price_bars['FINAL'] < long_zone['LOW']) | eod
     stop_looking_for_short_setup = (small_price_bars['FINAL'] > short_zone['HIGH']) | eod
 

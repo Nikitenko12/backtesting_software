@@ -16,6 +16,7 @@ from sysobjects.dict_of_named_futures_per_contract_prices import (
     contract_name_from_column_name,
 )
 from sysobjects.rolls import rollParameters
+from sysobjects.sessions import Session
 
 price_contract_name = contract_name_from_column_name(price_name)
 carry_contract_name = contract_name_from_column_name(carry_name)
@@ -201,6 +202,9 @@ class futuresSimData(simData):
         :return: futuresInstrument object
         """
 
+        raise NotImplementedError()
+
+    def get_sessions_for_instrument(self, instrument_code: str) -> Session:
         raise NotImplementedError()
 
 

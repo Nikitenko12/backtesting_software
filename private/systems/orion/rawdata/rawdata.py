@@ -7,6 +7,8 @@ import pandas as pd
 from systems.system_cache import diagnostic, output
 from syscore.dateutils import BUSINESS_DAYS_IN_YEAR
 
+from syscore.exceptions import missingData
+
 
 class OrionRawData(SystemStage):
     def get_aggregated_minute_prices(self, instrument_code: str, barsize: str = '5T'):
@@ -38,6 +40,16 @@ class OrionRawData(SystemStage):
 
         minuteprice = minuteprice.loc[minuteprice['FINAL'] != 0.0]
         return minuteprice
+
+    def get_sessions(self, instrument_code: str):
+        self.log.debug(
+            "Getting sessions for %s" % instrument_code,
+            instrument_code=instrument_code,
+        )
+        sessions = self.data_stage.get_sessions_for_instrument(instrument_code)
+
+        return sessions
+
 
     @property
     def name(self):

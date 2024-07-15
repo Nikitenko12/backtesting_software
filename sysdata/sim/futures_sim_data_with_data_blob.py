@@ -5,6 +5,7 @@ from sysdata.fx.spotfx import fxPricesData
 from sysdata.futures.instruments import futuresInstrumentData
 from sysdata.futures.rolls_parameters import rollParametersData
 from sysdata.futures.spread_costs import spreadCostData
+from sysdata.futures.sessions import sessionsData
 from sysdata.data_blob import dataBlob
 
 
@@ -16,6 +17,7 @@ from syscore.exceptions import missingData
 from sysobjects.spot_fx_prices import fxPrices
 from sysobjects.adjusted_prices import futuresAdjustedPrices
 from sysobjects.rolls import rollParameters
+from sysobjects.sessions import Session
 
 
 class genericBlobUsingFuturesSimData(futuresSimData):
@@ -88,6 +90,9 @@ class genericBlobUsingFuturesSimData(futuresSimData):
     def get_spread_cost(self, instrument_code: str) -> float:
         return self.db_spread_cost_data.get_spread_cost(instrument_code)
 
+    def get_sessions_for_instrument(self, instrument_code: str) -> Session:
+        return self.db_sessions_data.get_sessions_for_instrument(instrument_code)
+
     @property
     def data(self):
         return self._data
@@ -111,3 +116,7 @@ class genericBlobUsingFuturesSimData(futuresSimData):
     @property
     def db_spread_cost_data(self) -> spreadCostData:
         return self.data.db_spread_cost
+
+    @property
+    def db_sessions_data(self) -> sessionsData:
+        return self.data.db_sessions
