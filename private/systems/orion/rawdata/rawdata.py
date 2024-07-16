@@ -23,6 +23,23 @@ class OrionRawData(SystemStage):
             }
         )
 
+        sessions = self.get_sessions(instrument_code)
+
+        datetime = agg_minuteprice.index.to_series()
+        session_end_times = pd.Series([pd.Timestamp(f'{x.date()} {sessions.end_time}') for x in datetime],
+                                      index=datetime.index)
+        session_start_times = pd.Series([pd.Timestamp(f'{x.date()} {sessions.start_time}') for x in datetime],
+                                        index=datetime.index)
+        agg_minuteprice = agg_minuteprice.loc[
+            ~(
+                (
+                    agg_minuteprice.index.to_series().ge(session_end_times)
+                ) & (
+                    agg_minuteprice.index.to_series().lt(session_start_times)
+                )
+            )
+        ]
+
         return agg_minuteprice
 
     def get_minute_prices(self, instrument_code: str):
@@ -49,7 +66,6 @@ class OrionRawData(SystemStage):
         sessions = self.data_stage.get_sessions_for_instrument(instrument_code)
 
         return sessions
-
 
     @property
     def name(self):
