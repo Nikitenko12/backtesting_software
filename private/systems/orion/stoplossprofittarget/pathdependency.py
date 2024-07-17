@@ -145,14 +145,14 @@ def get_signals_after_limit_price_is_hit(
         if pd.isna(dt_when_limit_price_was_hit):   # Limit price was never hit
             continue
 
-        if signal > 0:
-            zone_to_be_hit = long_zones.loc[datetime_starting_from_next_bar.loc[:dt_when_limit_price_was_hit], 'HIGH'].cummax()
+        if signal > 0:      # Ignore trade if it reaches opposing zone
+            zone_to_be_hit = short_zones.loc[datetime_starting_from_next_bar.loc[:dt_when_limit_price_was_hit], 'HIGH'].cummax()
             dt_when_zone_was_hit = prices.loc[
-                datetime_starting_from_next_bar.loc[:dt_when_limit_price_was_hit], 'LOW'].le(   ## FIXME (dt_when_limit_price_was_hit + 1)??
+                datetime_starting_from_next_bar.loc[:dt_when_limit_price_was_hit], 'LOW'].le(
                 zone_to_be_hit
             ).idxmax()
         else:
-            zone_to_be_hit = short_zones.loc[datetime_starting_from_next_bar.loc[:dt_when_limit_price_was_hit], 'LOW'].cummin()
+            zone_to_be_hit = long_zones.loc[datetime_starting_from_next_bar.loc[:dt_when_limit_price_was_hit], 'LOW'].cummin()
             dt_when_zone_was_hit = prices.loc[
                 datetime_starting_from_next_bar.loc[:dt_when_limit_price_was_hit], 'HIGH'].ge(
                 zone_to_be_hit
@@ -335,8 +335,12 @@ if __name__ == "__main__":
 
     from sysdata.sim.db_futures_sim_data import dbFuturesSimData
 
-    price_bars = dbFuturesSimData().get_backadjusted_futures_price('CL')
+    data = dbFuturesSimData()
+
+    price_bars = data.get_backadjusted_futures_price('CL')
     price_bars = price_bars.loc[price_bars['FINAL'] != 0.0]
+
+    sessions = data.get_sessions_for_instrument('CL')
 
     small_price_bars = price_bars.resample('5T').agg(
         {
@@ -357,7 +361,37 @@ if __name__ == "__main__":
         }
     )
 
-    orion_trades = orion(price_bars)
+    datetime_big = big_price_bars.index.to_series()
+    session_end_times_big = pd.Series([pd.Timestamp(f'{x.date()} {sessions.end_time}') for x in datetime_big],
+                                      index=datetime_big.index)
+    session_start_times_big = pd.Series([pd.Timestamp(f'{x.date()} {sessions.start_time}') for x in datetime_big],
+                                        index=datetime_big.index)
+    big_price_bars = big_price_bars.loc[
+        ~(
+                (
+                    big_price_bars.index.to_series().ge(session_end_times_big)
+                ) & (
+                    big_price_bars.index.to_series().lt(session_start_times_big)
+                )
+        )
+    ]
+
+    datetime_small = small_price_bars.index.to_series()
+    session_end_times_small = pd.Series([pd.Timestamp(f'{x.date()} {sessions.end_time}') for x in datetime_small],
+                                  index=datetime_small.index)
+    session_start_times_small = pd.Series([pd.Timestamp(f'{x.date()} {sessions.start_time}') for x in datetime_small],
+                                    index=datetime_small.index)
+    small_price_bars = small_price_bars.loc[
+        ~(
+                (
+                    small_price_bars.index.to_series().ge(session_end_times_small)
+                ) & (
+                    small_price_bars.index.to_series().lt(session_start_times_small)
+                )
+        )
+    ]
+
+    orion_trades = orion(price_bars, sessions)
     signals = orion_trades['signals']
 
     # apds = [

@@ -24,6 +24,21 @@ def orion(minute_bars: pd.DataFrame, sessions: Session, big_timeframe='30T', sma
             'VOLUME': 'sum',
         }
     )
+    datetime_big = big_price_bars.index.to_series()
+    session_end_times_big = pd.Series([pd.Timestamp(f'{x.date()} {sessions.end_time}') for x in datetime_big],
+                                      index=datetime_big.index)
+    session_start_times_big = pd.Series([pd.Timestamp(f'{x.date()} {sessions.start_time}') for x in datetime_big],
+                                        index=datetime_big.index)
+    big_price_bars = big_price_bars.loc[
+        ~(
+                (
+                    big_price_bars.index.to_series().ge(session_end_times_big)
+                ) & (
+                    big_price_bars.index.to_series().lt(session_start_times_big)
+                )
+        )
+    ]
+
     small_price_bars = minute_bars.resample(small_timeframe).agg(
         {
             'OPEN': 'first',
@@ -33,27 +48,18 @@ def orion(minute_bars: pd.DataFrame, sessions: Session, big_timeframe='30T', sma
             'VOLUME': 'sum',
         }
     )
-    datetime = small_price_bars.index.to_series()
-    session_end_times = pd.Series([pd.Timestamp(f'{x.date()} {sessions.end_time}') for x in datetime],
-                                  index=datetime.index)
-    session_start_times = pd.Series([pd.Timestamp(f'{x.date()} {sessions.start_time}') for x in datetime],
-                                    index=datetime.index)
-    big_price_bars = big_price_bars.loc[
-        ~(
-            (
-                big_price_bars.index.to_series().ge(session_end_times)
-            ) & (
-                big_price_bars.index.to_series().lt(session_start_times)
-            )
-        )
-    ]
+    datetime_small = small_price_bars.index.to_series()
+    session_end_times_small = pd.Series([pd.Timestamp(f'{x.date()} {sessions.end_time}') for x in datetime_small],
+                                        index=datetime_small.index)
+    session_start_times_small = pd.Series([pd.Timestamp(f'{x.date()} {sessions.start_time}') for x in datetime_small],
+                                          index=datetime_small.index)
     small_price_bars = small_price_bars.loc[
         ~(
-            (
-                small_price_bars.index.to_series().ge(session_end_times)
-            ) & (
-                small_price_bars.index.to_series().lt(session_start_times)
-            )
+                (
+                    small_price_bars.index.to_series().ge(session_end_times_small)
+                ) & (
+                    small_price_bars.index.to_series().lt(session_start_times_small)
+                )
         )
     ]
 

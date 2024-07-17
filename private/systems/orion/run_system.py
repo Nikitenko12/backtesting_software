@@ -82,7 +82,8 @@ if __name__ == "__main__":
     new_signals = new_orion_trades['forecasts']
 
     where_values = new_orion_trades['long_limit_prices_after_slpt'].add(
-        new_orion_trades['short_limit_prices_after_slpt'], fill_value=0)
+        new_orion_trades['short_limit_prices_after_slpt'], fill_value=0
+    )
     new_apds = [
         mpf.make_addplot(small_price_bars['LOW'].where(new_signals > 0, np.nan), type='scatter', marker='^'),
         mpf.make_addplot(small_price_bars['HIGH'].where(new_signals < 0, np.nan), type='scatter', marker='v'),
@@ -144,6 +145,56 @@ if __name__ == "__main__":
         long_limit_prices=signals_after_limit_price_is_hit_dict['new_long_limit_prices'],
         short_limit_prices=signals_after_limit_price_is_hit_dict['new_short_limit_prices'],
     )
+
+    #########################################################################################################################
+    mpf.figure()
+
+    new_signals_2 = signals_after_slpt_dict['forecasts']
+    where_values = signals_after_slpt_dict['long_limit_prices_after_slpt'].add(
+        signals_after_slpt_dict['short_limit_prices_after_slpt'], fill_value=0
+    )
+    new_apds = [
+        mpf.make_addplot(small_price_bars['LOW'].where(new_signals_2 > 0, np.nan), type='scatter', marker='^'),
+        mpf.make_addplot(small_price_bars['HIGH'].where(new_signals_2 < 0, np.nan), type='scatter', marker='v'),
+        mpf.make_addplot(signals_after_slpt_dict['long_limit_prices_after_slpt'], type='line', color='blue'),
+        mpf.make_addplot(signals_after_slpt_dict['short_limit_prices_after_slpt'], type='line', color='blue'),
+        mpf.make_addplot(
+            signals_after_slpt_dict['stop_loss_levels_after_slpt'], type='line', color='maroon',
+            fill_between=dict(
+                y1=signals_after_slpt_dict['stop_loss_levels_after_slpt'].values,
+                y2=where_values.values,
+                where=~(where_values.isna()).values,
+                alpha=0.5,
+                color='red'
+            )
+        ),
+        mpf.make_addplot(
+            signals_after_slpt_dict['profit_target_levels_after_slpt'], type='line', color='green',
+            fill_between=dict(
+                y1=signals_after_slpt_dict['profit_target_levels_after_slpt'].values,
+                y2=where_values.values,
+                where=~(where_values.isna()).values,
+                alpha=0.5,
+                color='green'
+            )
+        ),
+    ]
+    mpf.plot(
+        small_price_bars.rename(columns=dict(OPEN="Open", HIGH="High", LOW="Low", FINAL="Close")),
+        type='candle',
+        show_nontrading=False,
+        addplot=new_apds,
+    )
+
+    #########################################################################################################################
+
+    price_bars = orion_system.rawdata.get_minute_prices('CL')
+    sessions = orion_system.data.get_sessions_for_instrument('CL')
+
+    orion_rules_result = orion(price_bars, sessions)
+
+
+
 
 
 
