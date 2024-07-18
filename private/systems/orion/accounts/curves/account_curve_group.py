@@ -156,7 +156,7 @@ class accountCurveGroup(accountCurve):
 
 def _kwargs_with_defaults(kwargs: dict) -> dict:
     if "frequency" not in kwargs:
-        kwargs["frequency"] = Frequency.BDay
+        kwargs["frequency"] = Frequency.Minute
     if "curve_type" not in kwargs:
         kwargs["curve_type"] = NET_CURVE
     if "is_percentage" not in kwargs:

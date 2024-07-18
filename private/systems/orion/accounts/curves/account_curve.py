@@ -21,7 +21,7 @@ class accountCurve(pd.Series):
     def __init__(
         self,
         pandl_calculator_with_costs: pandlCalculationWithGenericCosts,
-        frequency: Frequency = Frequency.BDay,
+        frequency: Frequency = Frequency.Minute,
         curve_type: str = NET_CURVE,
         is_percentage: bool = False,
         weighted=False,

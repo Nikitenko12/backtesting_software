@@ -188,13 +188,16 @@ if __name__ == "__main__":
 
     #########################################################################################################################
 
+    import pandas as pd
+
     price_bars = orion_system.rawdata.get_minute_prices('CL')
     sessions = orion_system.data.get_sessions_for_instrument('CL')
 
     orion_rules_result = orion(price_bars, sessions)
 
+    orion_rules_result_df = pd.DataFrame({k: orion_rules_result[k] for k in orion_rules_result if k not in ['long_zones', 'short_zones']})
 
-
+    signals_after_limit_price_is_hit_df = pd.DataFrame(signals_after_limit_price_is_hit_dict)
 
 
 

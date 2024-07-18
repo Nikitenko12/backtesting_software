@@ -106,7 +106,7 @@ class OrionTradingRule(object):
         result = self._call_with_data(list_of_data_for_call)
 
         # Check for all zeros
-        result['signals'] = replace_all_zeros_with_nan(result['signals'])
+        # result['signals'] = replace_all_zeros_with_nan(result['signals'])
 
         return result
 
