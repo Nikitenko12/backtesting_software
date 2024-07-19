@@ -143,8 +143,8 @@ def get_signals_after_limit_price_is_hit(
                     dt_when_limit_price_was_hit = pd.NA
 
             if pd.isna(dt_when_limit_price_was_hit):    # Limit price was never hit
-                signals_starting_from_today = new_signals.mask(price_index_series < dt, np.nan).dropna()
-                dt_when_signal_changes = (signals_starting_from_today.diff().iloc[1:] != 0).idxmax()
+                signals_starting_from_this_bar = new_signals.mask(price_index_series < dt, np.nan).dropna()
+                dt_when_signal_changes = (signals_starting_from_this_bar.diff().iloc[1:] != 0).idxmax()
                 limit_price = np.nan
                 new_signals[dt:dt_when_signal_changes] = 0
                 new_long_limit_prices[dt:dt_when_signal_changes] = np.nan
@@ -154,6 +154,13 @@ def get_signals_after_limit_price_is_hit(
                 new_long_profit_target_levels[dt:dt_when_signal_changes] = np.nan
                 new_short_profit_target_levels[dt:dt_when_signal_changes] = np.nan
 
+                for _ in prices.loc[dt:dt_when_signal_changes].index.to_series().iloc[:-1]:
+                    try:
+                        next(it)
+                    except StopIteration:
+                        break
+
+                previous_signal = 0
                 continue
 
             if signal > 0:      # Ignore trade if it reaches opposing zone
@@ -170,11 +177,30 @@ def get_signals_after_limit_price_is_hit(
                 ).idxmax()
 
             if dt_when_zone_was_hit < dt_when_limit_price_was_hit:  # Did not enter trade
-                new_signals[dt] = 0
+                signals_starting_from_this_bar = new_signals.mask(price_index_series < dt, np.nan).dropna()
+                dt_when_signal_changes = (signals_starting_from_this_bar.diff().iloc[1:] != 0).idxmax()
+                limit_price = np.nan
+                new_signals[dt:dt_when_signal_changes] = 0
+
                 if signal > 0:
-                    new_long_limit_prices[dt] = np.nan
+                    new_long_limit_prices[dt:dt_when_signal_changes] = np.nan
+                    new_long_stop_loss_levels[dt:dt_when_signal_changes] = np.nan
+                    new_long_profit_target_levels[dt:dt_when_signal_changes] = np.nan
+
                 else:
-                    new_short_limit_prices[dt] = np.nan
+                    new_short_limit_prices[dt:dt_when_signal_changes] = np.nan
+                    new_short_stop_loss_levels[dt:dt_when_signal_changes] = np.nan
+                    new_short_profit_target_levels[dt:dt_when_signal_changes] = np.nan
+
+                for _ in prices.loc[dt:dt_when_signal_changes].index.to_series().iloc[:-1]:
+                    try:
+                        next(it)
+                    except StopIteration:
+                        break
+
+                previous_signal = 0
+                continue
+
             else:   # Entered trade at dt_when_limit_price_was_hit
                 new_signals[dt:dt_when_limit_price_was_hit] = 0
                 new_signals[dt_when_limit_price_was_hit] = signal
@@ -211,6 +237,8 @@ def get_signals_after_limit_price_is_hit(
 
             limit_price = np.nan
 
+        previous_signal = signal
+
     return dict(
         signals=new_signals,
         new_long_limit_prices=new_long_limit_prices,
@@ -233,14 +261,14 @@ def apply_stop_loss_and_profit_target_to_signals(
     short_limit_prices: pd.Series,
 ) -> dict:
 
-    signals = signals.shift(1)
+    price_index_series = prices.index.to_series()
+    trades = signals.diff().iloc[1:-1]
+    entries = trades.loc[trades.ne(0) & signals.iloc[1:-1].ne(0)]
+    datetime_when_price_crossed_sl_or_pt_for_trade = pd.Series(pd.NaT).reindex_like(entries)
 
-    # get index where prices crossed stop loss and profit target for each trade
-    datetime_when_price_crossed_sl_or_pt_for_trade = pd.Series(None).reindex_like(signals.loc[signals != 0].iloc[1:])
-    for dt, signal in (signals.loc[signals != 0].iloc[1:-1]).items():
-        datetime_starting_from_next_bar = prices.index.to_series()
-        datetime_starting_from_next_bar = datetime_starting_from_next_bar.mask(
-            datetime_starting_from_next_bar <= dt, pd.NaT
+    for dt, signal in entries.items():
+        datetime_starting_from_next_bar = price_index_series.mask(
+            price_index_series <= dt, pd.NaT
         ).dropna()
         datetime_when_price_crossed_sl_or_pt_for_trade.loc[dt] = (
             (prices.loc[datetime_starting_from_next_bar, 'HIGH'].ge(long_profit_target_levels.loc[dt]) | (
@@ -255,80 +283,53 @@ def apply_stop_loss_and_profit_target_to_signals(
     # at a certain date, get first trade (entry) where you would be in the market
     # get, for a certain signal, whether the prices hit stop loss or profit target on the previous signal's entry
     datetime_when_price_crossed_sl_or_pt_for_trade.dropna(inplace=True)
-    new_datetime_when_price_crossed_sl_or_pt_for_trade = datetime_when_price_crossed_sl_or_pt_for_trade.copy()
-    for i in range(1, len(datetime_when_price_crossed_sl_or_pt_for_trade)-1):
-        if new_datetime_when_price_crossed_sl_or_pt_for_trade.loc[
-            datetime_when_price_crossed_sl_or_pt_for_trade.index[i]
-        ] <= (
-            new_datetime_when_price_crossed_sl_or_pt_for_trade.shift(1).loc[
-                datetime_when_price_crossed_sl_or_pt_for_trade.index[i]
-            ]
-        ):
-            new_datetime_when_price_crossed_sl_or_pt_for_trade.drop(
-                datetime_when_price_crossed_sl_or_pt_for_trade.index[i], inplace=True
-            )
+    previous_exit_dt = datetime_when_price_crossed_sl_or_pt_for_trade.iloc[0]
+    it = iter(list(datetime_when_price_crossed_sl_or_pt_for_trade.items())[1:])
+    for trade_dt, exit_dt in it:
+        if trade_dt <= previous_exit_dt:
+            datetime_when_price_crossed_sl_or_pt_for_trade.drop(index=trade_dt, inplace=True)
+        else:
+            previous_exit_dt = exit_dt
 
-    # Removing trades which entered before last trade exited
-    new_datetime_when_price_crossed_sl_or_pt_for_trade = (
-        new_datetime_when_price_crossed_sl_or_pt_for_trade.loc[
-            new_datetime_when_price_crossed_sl_or_pt_for_trade.shift(1).lt(
-                new_datetime_when_price_crossed_sl_or_pt_for_trade.index.to_series()
-            )
-        ]
-    )
+    no_entries_at_these_dates = [x for x in signals.index if x not in datetime_when_price_crossed_sl_or_pt_for_trade.index]
 
-    # signals = signals.shift(-1)
-    # new_datetime_when_price_crossed_sl_or_pt_for_trade = pd.Series(
-    #     data=new_datetime_when_price_crossed_sl_or_pt_for_trade.values,
-    #     index=signals.index.to_series().shift(1).loc[new_datetime_when_price_crossed_sl_or_pt_for_trade.index]
-    # )
+    signals.loc[no_entries_at_these_dates] = np.nan
+    signals.loc[datetime_when_price_crossed_sl_or_pt_for_trade] = 0
+    signals = signals.ffill().fillna(0)
 
-    new_signals = signals.loc[new_datetime_when_price_crossed_sl_or_pt_for_trade.index].copy()
-    new_signals = new_signals.reindex_like(signals)
+    long_limit_prices.loc[no_entries_at_these_dates] = np.nan
+    long_limit_prices[datetime_when_price_crossed_sl_or_pt_for_trade] = 0
+    long_limit_prices = long_limit_prices.ffill().replace(0, np.nan)
 
-    new_long_stop_loss_levels = long_stop_loss_levels.loc[new_datetime_when_price_crossed_sl_or_pt_for_trade.index].copy()
-    new_long_stop_loss_levels = new_long_stop_loss_levels.reindex_like(signals).fillna(0)
+    short_limit_prices.loc[no_entries_at_these_dates] = np.nan
+    short_limit_prices[datetime_when_price_crossed_sl_or_pt_for_trade] = 0
+    short_limit_prices = short_limit_prices.ffill().replace(0, np.nan)
 
-    new_short_stop_loss_levels = short_stop_loss_levels.loc[new_datetime_when_price_crossed_sl_or_pt_for_trade.index].copy()
-    new_short_stop_loss_levels = new_short_stop_loss_levels.reindex_like(signals).fillna(0)
+    long_stop_loss_levels.loc[no_entries_at_these_dates] = np.nan
+    long_stop_loss_levels[datetime_when_price_crossed_sl_or_pt_for_trade] = 0
+    long_stop_loss_levels = long_stop_loss_levels.ffill().replace(0, np.nan)
 
-    new_long_profit_target_levels = long_profit_target_levels.loc[new_datetime_when_price_crossed_sl_or_pt_for_trade.index].copy()
-    new_long_profit_target_levels = new_long_profit_target_levels.reindex_like(signals).fillna(0)
+    short_stop_loss_levels.loc[no_entries_at_these_dates] = np.nan
+    short_stop_loss_levels[datetime_when_price_crossed_sl_or_pt_for_trade] = 0
+    short_stop_loss_levels = short_stop_loss_levels.ffill().replace(0, np.nan)
 
-    new_short_profit_target_levels = short_profit_target_levels.loc[new_datetime_when_price_crossed_sl_or_pt_for_trade.index].copy()
-    new_short_profit_target_levels = new_short_profit_target_levels.reindex_like(signals).fillna(0)
+    long_profit_target_levels.loc[no_entries_at_these_dates] = np.nan
+    long_profit_target_levels[datetime_when_price_crossed_sl_or_pt_for_trade] = 0
+    long_profit_target_levels = long_profit_target_levels.ffill().replace(0, np.nan)
 
-    new_long_limit_prices = long_limit_prices.loc[new_datetime_when_price_crossed_sl_or_pt_for_trade.index].copy()
-    new_long_limit_prices = new_long_limit_prices.reindex_like(signals)
+    short_profit_target_levels.loc[no_entries_at_these_dates] = np.nan
+    short_profit_target_levels[datetime_when_price_crossed_sl_or_pt_for_trade] = 0
+    short_profit_target_levels = short_profit_target_levels.ffill().replace(0, np.nan)
 
-    new_short_limit_prices = short_limit_prices.loc[new_datetime_when_price_crossed_sl_or_pt_for_trade.index].copy()
-    new_short_limit_prices = new_short_limit_prices.reindex_like(signals)
-
-    ##############
-
-    new_signals.loc[new_datetime_when_price_crossed_sl_or_pt_for_trade] = 0
-    new_signals = new_signals.ffill().fillna(0)
-
-    new_stop_loss_levels = new_long_stop_loss_levels.add(new_short_stop_loss_levels).replace(0, np.nan)
-    new_stop_loss_levels.loc[new_datetime_when_price_crossed_sl_or_pt_for_trade] = 0
-    new_stop_loss_levels = new_stop_loss_levels.ffill().replace(0, np.nan)
-
-    new_profit_target_levels = new_long_profit_target_levels.add(new_short_profit_target_levels).replace(0, np.nan)
-    new_profit_target_levels.loc[new_datetime_when_price_crossed_sl_or_pt_for_trade] = 0
-    new_profit_target_levels = new_profit_target_levels.ffill().replace(0, np.nan)
-
-    new_long_limit_prices.loc[new_datetime_when_price_crossed_sl_or_pt_for_trade] = 0
-    new_long_limit_prices = new_long_limit_prices.ffill().replace(0, np.nan)
-
-    new_short_limit_prices.loc[new_datetime_when_price_crossed_sl_or_pt_for_trade] = 0
-    new_short_limit_prices = new_short_limit_prices.ffill().replace(0, np.nan)
+    stop_loss_levels = long_stop_loss_levels.add(short_stop_loss_levels, 0).replace(0, np.nan)
+    profit_target_levels = long_profit_target_levels.add(short_profit_target_levels, 0).replace(0, np.nan)
 
     return dict(
-        forecasts=new_signals,
-        stop_loss_levels_after_slpt=new_stop_loss_levels,
-        profit_target_levels_after_slpt=new_profit_target_levels,
-        long_limit_prices_after_slpt=new_long_limit_prices,
-        short_limit_prices_after_slpt=new_short_limit_prices,
+        forecasts=signals,
+        stop_loss_levels_after_slpt=stop_loss_levels,
+        profit_target_levels_after_slpt=profit_target_levels,
+        long_limit_prices_after_slpt=long_limit_prices,
+        short_limit_prices_after_slpt=short_limit_prices,
     )
 
 
