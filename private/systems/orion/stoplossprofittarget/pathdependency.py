@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 
+from sysobjects.sessions import Session
 from systems.stage import SystemStage
 from systems.system_cache import input, diagnostic, output
 
@@ -17,6 +18,7 @@ class StopLossProfitTarget(SystemStage):
     def get_inputs(self, instrument_code: str):
         prices = self.get_prices(instrument_code)
         signals_dict = self.signals_dict(instrument_code)
+        sessions = self.get_sessions(instrument_code)
 
         long_limit_prices = signals_dict['long_limit_prices']
         short_limit_prices = signals_dict['short_limit_prices']
@@ -30,6 +32,7 @@ class StopLossProfitTarget(SystemStage):
 
         return (
             prices,
+            sessions,
             long_limit_prices,
             short_limit_prices,
             signals,
@@ -45,6 +48,7 @@ class StopLossProfitTarget(SystemStage):
     def get_signals_after_limit_price_is_hit_stop_loss_and_profit_target(self, instrument_code: str):
         (
             prices,
+            sessions,
             long_limit_prices,
             short_limit_prices,
             signals,
@@ -70,6 +74,7 @@ class StopLossProfitTarget(SystemStage):
         )
         updated_signals_dict = apply_stop_loss_and_profit_target_to_signals(
             prices=prices,
+            sessions=sessions,
             signals=signals_after_limit_prices['signals'],
             long_stop_loss_levels=signals_after_limit_prices['new_long_stop_loss_levels'],
             short_stop_loss_levels=signals_after_limit_prices['new_short_stop_loss_levels'],
@@ -98,6 +103,9 @@ class StopLossProfitTarget(SystemStage):
             instrument_code, barsize=self.parent.config.trading_rules['orion']['other_args']['small_timeframe']
         )
 
+    def get_sessions(self, instrument_code: str):
+        return self.parent.rawdata.get_sessions(instrument_code)
+
 
 def get_signals_after_limit_price_is_hit(
     prices: pd.DataFrame,
@@ -111,7 +119,7 @@ def get_signals_after_limit_price_is_hit(
     long_profit_target_levels: pd.Series,
     short_profit_target_levels: pd.Series,
 ):
-    new_signals = signals.copy() # shift(1)
+    new_signals = signals.copy()
     new_long_limit_prices = long_limit_prices.copy()
     new_short_limit_prices = short_limit_prices.copy()
     new_long_stop_loss_levels = long_stop_loss_levels.copy()
@@ -124,7 +132,7 @@ def get_signals_after_limit_price_is_hit(
     limit_price = np.nan
     price_index_series = prices.index.to_series()
     previous_signal = new_signals.iloc[0]
-    it = iter(list(new_signals.items())[1:-1])
+    it = iter(new_signals.iloc[1:-1].items())
     for dt, signal in it:
         if signal != previous_signal and signal != 0 and limit_price is np.nan:
             datetime_starting_from_next_bar = price_index_series.mask(
@@ -135,24 +143,28 @@ def get_signals_after_limit_price_is_hit(
                 try:
                     dt_when_limit_price_was_hit = prices.loc[datetime_starting_from_next_bar, 'LOW'].le(limit_price).idxmax()
                 except ValueError:
-                    dt_when_limit_price_was_hit = pd.NA
+                    dt_when_limit_price_was_hit = pd.NaT
             else:
+                limit_price = new_short_limit_prices.loc[dt]
                 try:
                     dt_when_limit_price_was_hit = prices.loc[datetime_starting_from_next_bar, 'HIGH'].ge(limit_price).idxmax()
                 except ValueError:
-                    dt_when_limit_price_was_hit = pd.NA
+                    dt_when_limit_price_was_hit = pd.NaT
 
             if pd.isna(dt_when_limit_price_was_hit):    # Limit price was never hit
                 signals_starting_from_this_bar = new_signals.mask(price_index_series < dt, np.nan).dropna()
-                dt_when_signal_changes = (signals_starting_from_this_bar.diff().iloc[1:] != 0).idxmax()
+                dt_when_signal_changes = signals_starting_from_this_bar.diff().iloc[1:].ne(0).idxmax()
                 limit_price = np.nan
                 new_signals[dt:dt_when_signal_changes] = 0
-                new_long_limit_prices[dt:dt_when_signal_changes] = np.nan
-                new_short_limit_prices[dt:dt_when_signal_changes] = np.nan
-                new_long_stop_loss_levels[dt:dt_when_signal_changes] = np.nan
-                new_short_stop_loss_levels[dt:dt_when_signal_changes] = np.nan
-                new_long_profit_target_levels[dt:dt_when_signal_changes] = np.nan
-                new_short_profit_target_levels[dt:dt_when_signal_changes] = np.nan
+                if signal > 0:
+                    new_long_limit_prices[dt:dt_when_signal_changes] = np.nan
+                    new_long_stop_loss_levels[dt:dt_when_signal_changes] = np.nan
+                    new_long_profit_target_levels[dt:dt_when_signal_changes] = np.nan
+
+                else:
+                    new_short_limit_prices[dt:dt_when_signal_changes] = np.nan
+                    new_short_stop_loss_levels[dt:dt_when_signal_changes] = np.nan
+                    new_short_profit_target_levels[dt:dt_when_signal_changes] = np.nan
 
                 for _ in prices.loc[dt:dt_when_signal_changes].index.to_series().iloc[:-1]:
                     try:
@@ -178,21 +190,27 @@ def get_signals_after_limit_price_is_hit(
 
             if dt_when_zone_was_hit < dt_when_limit_price_was_hit:  # Did not enter trade
                 signals_starting_from_this_bar = new_signals.mask(price_index_series < dt, np.nan).dropna()
-                dt_when_signal_changes = (signals_starting_from_this_bar.diff().iloc[1:] != 0).idxmax()
+                dt_when_signal_changes = signals_starting_from_this_bar.diff().iloc[1:].ne(0).idxmax()
+                zones_starting_from_this_bar = (
+                    short_zones.mask(price_index_series < dt, np.nan).dropna() if signal > 0 else (
+                        long_zones.mask(price_index_series < dt, np.nan).dropna()
+                    )
+                )
+                dt_when_zone_changes = zones_starting_from_this_bar.diff().iloc[1:].ne(0).all(axis=1).idxmax()
+                dt_when_signal_or_zone_changes = min(dt_when_signal_changes, dt_when_zone_changes)
+
                 limit_price = np.nan
-                new_signals[dt:dt_when_signal_changes] = 0
+                new_signals[dt:dt_when_signal_or_zone_changes] = 0
 
-                if signal > 0:
-                    new_long_limit_prices[dt:dt_when_signal_changes] = np.nan
-                    new_long_stop_loss_levels[dt:dt_when_signal_changes] = np.nan
-                    new_long_profit_target_levels[dt:dt_when_signal_changes] = np.nan
+                new_long_limit_prices[dt:dt_when_signal_or_zone_changes] = np.nan
+                new_long_stop_loss_levels[dt:dt_when_signal_or_zone_changes] = np.nan
+                new_long_profit_target_levels[dt:dt_when_signal_or_zone_changes] = np.nan
 
-                else:
-                    new_short_limit_prices[dt:dt_when_signal_changes] = np.nan
-                    new_short_stop_loss_levels[dt:dt_when_signal_changes] = np.nan
-                    new_short_profit_target_levels[dt:dt_when_signal_changes] = np.nan
+                new_short_limit_prices[dt:dt_when_signal_or_zone_changes] = np.nan
+                new_short_stop_loss_levels[dt:dt_when_signal_or_zone_changes] = np.nan
+                new_short_profit_target_levels[dt:dt_when_signal_or_zone_changes] = np.nan
 
-                for _ in prices.loc[dt:dt_when_signal_changes].index.to_series().iloc[:-1]:
+                for _ in prices.loc[dt:dt_when_signal_or_zone_changes].index.to_series().iloc[:-1]:
                     try:
                         next(it)
                     except StopIteration:
@@ -205,31 +223,33 @@ def get_signals_after_limit_price_is_hit(
                 new_signals[dt:dt_when_limit_price_was_hit] = 0
                 new_signals[dt_when_limit_price_was_hit] = signal
 
+                new_long_limit_prices[dt:dt_when_limit_price_was_hit] = np.nan
+                new_short_limit_prices[dt:dt_when_limit_price_was_hit] = np.nan
+
+                aux = new_long_stop_loss_levels[dt].copy()
+                new_long_stop_loss_levels[dt:dt_when_limit_price_was_hit] = np.nan
+                new_long_stop_loss_levels[dt_when_limit_price_was_hit] = aux
+
+                aux = new_long_profit_target_levels[dt].copy()
+                new_long_profit_target_levels[dt:dt_when_limit_price_was_hit] = np.nan
+                new_long_profit_target_levels[dt_when_limit_price_was_hit] = aux
+
+                aux = new_short_stop_loss_levels[dt].copy()
+                new_short_stop_loss_levels[dt:dt_when_limit_price_was_hit] = np.nan
+                new_short_stop_loss_levels[dt_when_limit_price_was_hit] = aux
+
+                aux = new_short_profit_target_levels[dt].copy()
+                new_short_profit_target_levels[dt:dt_when_limit_price_was_hit] = np.nan
+                new_short_profit_target_levels[dt_when_limit_price_was_hit] = aux
+
                 if signal > 0:
-                    new_long_limit_prices[dt:dt_when_limit_price_was_hit] = np.nan
                     new_long_limit_prices[dt_when_limit_price_was_hit] = limit_price
-
-                    aux = new_long_stop_loss_levels[dt].copy()
-                    new_long_stop_loss_levels[dt:dt_when_limit_price_was_hit] = np.nan
-                    new_long_stop_loss_levels[dt_when_limit_price_was_hit] = aux
-
-                    aux = new_long_profit_target_levels[dt].copy()
-                    new_long_profit_target_levels[dt:dt_when_limit_price_was_hit] = np.nan
-                    new_long_profit_target_levels[dt_when_limit_price_was_hit] = aux
-
+                    new_short_limit_prices[dt_when_limit_price_was_hit] = np.nan
                 else:
-                    new_short_limit_prices[dt:dt_when_limit_price_was_hit] = np.nan
                     new_short_limit_prices[dt_when_limit_price_was_hit] = limit_price
+                    new_long_limit_prices[dt_when_limit_price_was_hit] = np.nan
 
-                    aux = new_short_stop_loss_levels[dt].copy()
-                    new_short_stop_loss_levels[dt:dt_when_limit_price_was_hit] = np.nan
-                    new_short_stop_loss_levels[dt_when_limit_price_was_hit] = aux
-
-                    aux = new_short_profit_target_levels[dt].copy()
-                    new_short_profit_target_levels[dt:dt_when_limit_price_was_hit] = np.nan
-                    new_short_profit_target_levels[dt_when_limit_price_was_hit] = aux
-
-                for _ in prices.loc[dt:dt_when_limit_price_was_hit].index:
+                for _ in prices.loc[dt:dt_when_limit_price_was_hit].index.to_series():
                     try:
                         next(it)
                     except StopIteration:
@@ -252,6 +272,7 @@ def get_signals_after_limit_price_is_hit(
 
 def apply_stop_loss_and_profit_target_to_signals(
     prices: pd.DataFrame,
+    sessions: Session,
     signals: pd.Series,
     long_stop_loss_levels: pd.Series,
     short_stop_loss_levels: pd.Series,
@@ -265,6 +286,15 @@ def apply_stop_loss_and_profit_target_to_signals(
     trades = signals.diff().iloc[1:-1]
     entries = trades.loc[trades.ne(0) & signals.iloc[1:-1].ne(0)]
     datetime_when_price_crossed_sl_or_pt_for_trade = pd.Series(pd.NaT).reindex_like(entries)
+    datetime_for_entries = datetime_when_price_crossed_sl_or_pt_for_trade.index.to_series()
+    session_end_times_for_entries = pd.Series(
+        [
+            price_index_series.asof(
+                pd.Timestamp(f'{x.date()} {sessions.end_time}').tz_convert(tz=datetime_for_entries.index.tz)
+            ) for x in datetime_for_entries.index
+        ],
+        index=datetime_for_entries.index,
+    )
 
     for dt, signal in entries.items():
         datetime_starting_from_next_bar = price_index_series.mask(
@@ -279,12 +309,16 @@ def apply_stop_loss_and_profit_target_to_signals(
                 )).idxmax()
             )
         )
+        datetime_when_price_crossed_sl_or_pt_for_trade[dt] = min(   # EOD exit
+            datetime_when_price_crossed_sl_or_pt_for_trade[dt],
+            session_end_times_for_entries[dt]
+        )
 
     # at a certain date, get first trade (entry) where you would be in the market
     # get, for a certain signal, whether the prices hit stop loss or profit target on the previous signal's entry
     datetime_when_price_crossed_sl_or_pt_for_trade.dropna(inplace=True)
     previous_exit_dt = datetime_when_price_crossed_sl_or_pt_for_trade.iloc[0]
-    it = iter(list(datetime_when_price_crossed_sl_or_pt_for_trade.items())[1:])
+    it = iter(datetime_when_price_crossed_sl_or_pt_for_trade.iloc[1:].items())
     for trade_dt, exit_dt in it:
         if trade_dt <= previous_exit_dt:
             datetime_when_price_crossed_sl_or_pt_for_trade.drop(index=trade_dt, inplace=True)
@@ -321,8 +355,8 @@ def apply_stop_loss_and_profit_target_to_signals(
     short_profit_target_levels[datetime_when_price_crossed_sl_or_pt_for_trade] = 0
     short_profit_target_levels = short_profit_target_levels.ffill().replace(0, np.nan)
 
-    stop_loss_levels = long_stop_loss_levels.add(short_stop_loss_levels, 0).replace(0, np.nan)
-    profit_target_levels = long_profit_target_levels.add(short_profit_target_levels, 0).replace(0, np.nan)
+    stop_loss_levels = long_stop_loss_levels.add(short_stop_loss_levels, fill_value=0).replace(0, np.nan)
+    profit_target_levels = long_profit_target_levels.add(short_profit_target_levels, fill_value=0).replace(0, np.nan)
 
     return dict(
         forecasts=signals,
@@ -443,6 +477,7 @@ if __name__ == "__main__":
 
     new_orion_trades = apply_stop_loss_and_profit_target_to_signals(
         prices=small_price_bars,
+        sessions=sessions,
         signals=orion_trades_which_hit_limit_prices['signals'],
         long_stop_loss_levels=orion_trades_which_hit_limit_prices['new_long_stop_loss_levels'],
         short_stop_loss_levels=orion_trades_which_hit_limit_prices['new_short_stop_loss_levels'],
@@ -487,4 +522,5 @@ if __name__ == "__main__":
         addplot=new_apds,
     )
 
-
+    orion_trades_df = pd.DataFrame({x: orion_trades[x] for x in list(orion_trades.keys())[:-2]})
+    orion_trades_which_hit_limit_prices_df = pd.DataFrame(orion_trades_which_hit_limit_prices)

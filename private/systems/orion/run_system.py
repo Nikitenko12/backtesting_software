@@ -199,5 +199,5 @@ if __name__ == "__main__":
 
     signals_after_limit_price_is_hit_df = pd.DataFrame(signals_after_limit_price_is_hit_dict)
 
-
+    signals_after_slpt_df = pd.DataFrame(signals_after_slpt_dict)
 
