@@ -188,17 +188,19 @@ def get_signals_after_limit_price_is_hit(
                     zone_to_be_hit
                 ).idxmax()
 
-            if dt_when_zone_was_hit < dt_when_limit_price_was_hit:  # Did not enter trade
-                signals_starting_from_this_bar = new_signals.mask(price_index_series < dt, np.nan).dropna()
-                dt_when_signal_changes = signals_starting_from_this_bar.diff().iloc[1:].ne(0).idxmax()
-                zones_starting_from_this_bar = (
-                    short_zones.mask(price_index_series < dt, np.nan).dropna() if signal > 0 else (
-                        long_zones.mask(price_index_series < dt, np.nan).dropna()
-                    )
+            zones_starting_from_this_bar = (
+                long_zones.mask(price_index_series < dt, np.nan).dropna() if signal > 0 else (
+                    short_zones.mask(price_index_series < dt, np.nan).dropna()
                 )
-                dt_when_zone_changes = zones_starting_from_this_bar.diff().iloc[1:].ne(0).all(axis=1).idxmax()
-                dt_when_signal_or_zone_changes = min(dt_when_signal_changes, dt_when_zone_changes)
+            )
+            dt_when_zone_changes = zones_starting_from_this_bar.diff().iloc[1:].ne(0).all(axis=1).idxmax()
 
+            signals_starting_from_this_bar = new_signals.mask(price_index_series < dt, np.nan).dropna()
+            dt_when_signal_changes = signals_starting_from_this_bar.diff().iloc[1:].ne(0).idxmax()
+
+            dt_when_signal_or_zone_changes = min(dt_when_signal_changes, dt_when_zone_changes)
+
+            if dt_when_zone_was_hit < dt_when_limit_price_was_hit:  # Did not enter trade
                 limit_price = np.nan
                 new_signals[dt:dt_when_signal_or_zone_changes] = 0
 
@@ -249,13 +251,40 @@ def get_signals_after_limit_price_is_hit(
                     new_short_limit_prices[dt_when_limit_price_was_hit] = limit_price
                     new_long_limit_prices[dt_when_limit_price_was_hit] = np.nan
 
+                previous_signal = signal
                 for _ in prices.loc[dt:dt_when_limit_price_was_hit].index.to_series():
                     try:
                         next(it)
                     except StopIteration:
                         break
+                next(it)
 
             limit_price = np.nan
+
+            if signal == previous_signal and signal != 0:   # Signals continue to fire in the same direction after limit price is hit
+                new_signals[dt:dt_when_signal_or_zone_changes] = 0
+
+                new_long_limit_prices[dt:dt_when_signal_or_zone_changes] = np.nan
+                new_short_limit_prices[dt:dt_when_signal_or_zone_changes] = np.nan
+
+                new_long_stop_loss_levels[dt:dt_when_signal_or_zone_changes] = np.nan
+                new_long_profit_target_levels[dt:dt_when_signal_or_zone_changes] = np.nan
+
+                new_short_stop_loss_levels[dt:dt_when_signal_or_zone_changes] = np.nan
+                new_short_profit_target_levels[dt:dt_when_signal_or_zone_changes] = np.nan
+
+                for _ in prices.loc[dt:dt_when_signal_or_zone_changes].index.to_series().iloc[:-1]:
+                    try:
+                        next(it)
+                    except StopIteration:
+                        break
+
+                previous_signal = 0
+                continue
+
+            elif signal != previous_signal and signal != 0:     # Signals started to fire in the opposite direction after limit price is hit
+                ## FIXME write code here
+                pass
 
         previous_signal = signal
 
@@ -524,3 +553,4 @@ if __name__ == "__main__":
 
     orion_trades_df = pd.DataFrame({x: orion_trades[x] for x in list(orion_trades.keys())[:-2]})
     orion_trades_which_hit_limit_prices_df = pd.DataFrame(orion_trades_which_hit_limit_prices)
+    new_orion_trades_df = pd.DataFrame(new_orion_trades)
