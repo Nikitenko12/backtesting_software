@@ -67,10 +67,18 @@ def orion(minute_bars: pd.DataFrame, sessions: Session, big_timeframe='30T', sma
     may_we_look_for_short_setup = look_for_short_setup(big_price_bars, lookback=setup_lookback)
 
     long_zone = big_price_bars.shift(1).loc[may_we_look_for_long_setup.shift(1).fillna(False), :].reindex_like(small_price_bars, method='ffill')
+    # long_zone.loc[~may_we_look_for_long_setup.shift(1).fillna(False)] = 0
+    # long_zone = long_zone.reindex_like(small_price_bars, method='ffill').replace(0, np.nan)
     short_zone = big_price_bars.shift(1).loc[may_we_look_for_short_setup.shift(1).fillna(False), :].reindex_like(small_price_bars, method='ffill')
+    # short_zone.loc[~may_we_look_for_short_setup.shift(1).fillna(False)] = 0
+    # short_zone = long_zone.reindex_like(small_price_bars, method='ffill').replace(0, np.nan)
 
-    small_price_bar_in_long_zone = (long_zone['LOW'] < small_price_bars['LOW']) & (small_price_bars['LOW'] < long_zone['HIGH'])
-    small_price_bar_in_short_zone = (short_zone['HIGH'] > small_price_bars['HIGH']) & (small_price_bars['HIGH'] > short_zone['LOW'])
+    small_price_bar_in_long_zone = ~(long_zone[['LOW', 'HIGH']].isna().any()) & (
+        (long_zone['LOW'].lt(small_price_bars['LOW'])) & (small_price_bars['LOW'].lt(long_zone['HIGH']))
+    )
+    small_price_bar_in_short_zone = ~(short_zone[['LOW', 'HIGH']].isna().any()) & (
+        (short_zone['HIGH'].gt(small_price_bars['HIGH'])) & (small_price_bars['HIGH'].gt(short_zone['LOW']))
+    )
 
     """
     eod.iloc[:-1] = datetime.apply(lambda x: x.date()).iloc[:-1].lt(datetime.shift(-1).iloc[:-1].apply(lambda x: x.date()))     # FIXME add sessions, this is incorrect since sessions start the day before

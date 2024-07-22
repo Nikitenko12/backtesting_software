@@ -107,6 +107,61 @@ class StopLossProfitTarget(SystemStage):
         return self.parent.rawdata.get_sessions(instrument_code)
 
 
+def apply_limit_prices_to_signals(
+    prices: pd.DataFrame,
+    long_limit_prices: pd.Series,
+    short_limit_prices: pd.Series,
+    signals: pd.Series,
+    long_zones: pd.DataFrame,
+    short_zones: pd.DataFrame,
+    long_stop_loss_levels: pd.Series,
+    short_stop_loss_levels: pd.Series,
+    long_profit_target_levels: pd.Series,
+    short_profit_target_levels: pd.Series,
+):
+    limit_price = np.nan
+    price_index_series = prices.index.to_series()
+    trades = signals.loc[signals.ne(0)]
+    it = iter(trades.iloc[:-1].items())
+
+    limit_prices_df = pd.DataFrame(columns=['signal_dt', 'dt_when_limit_price_was_hit', 'dt_when_zone_was_hit'])
+
+    for dt, signal in it:
+        datetime_starting_from_next_bar = price_index_series.mask(
+            price_index_series <= dt, np.nan
+        ).dropna()
+        if signal > 0:
+            limit_price = long_limit_prices.loc[dt]
+            limit_price_was_hit = prices.loc[datetime_starting_from_next_bar, 'LOW'].le(limit_price)
+            dt_when_limit_price_was_hit = pd.NaT if limit_price_was_hit.eq(
+                False).all() else limit_price_was_hit.idxmax()
+
+            zone_to_be_hit = short_zones.loc[
+                datetime_starting_from_next_bar.loc[:dt_when_limit_price_was_hit], 'HIGH'].cummax()
+            zone_was_hit = prices.loc[
+                datetime_starting_from_next_bar.loc[:dt_when_limit_price_was_hit], 'LOW'].le(
+                zone_to_be_hit
+            )
+
+            zones_starting_from_this_bar = long_zones.mask(price_index_series < dt, np.nan).dropna()
+            zone_changes = zones_starting_from_this_bar.diff().iloc[1:].ne(0).any(axis=1)
+
+        else:
+            limit_price = short_limit_prices.loc[dt]
+            limit_price_was_hit = prices.loc[datetime_starting_from_next_bar, 'HIGH'].ge(limit_price)
+
+            zone_to_be_hit = long_zones.loc[
+                datetime_starting_from_next_bar.loc[:dt_when_limit_price_was_hit], 'LOW'].cummin()
+            zone_was_hit = prices.loc[
+                datetime_starting_from_next_bar.loc[:dt_when_limit_price_was_hit], 'HIGH'].ge(
+                zone_to_be_hit
+            )
+
+            zones_starting_from_this_bar = short_zones.mask(price_index_series < dt, np.nan).dropna()
+
+
+        zone_changes = zones_starting_from_this_bar.diff().iloc[1:].ne(0).any(axis=1)
+
 def get_signals_after_limit_price_is_hit(
     prices: pd.DataFrame,
     long_limit_prices: pd.Series,
@@ -132,9 +187,31 @@ def get_signals_after_limit_price_is_hit(
     limit_price = np.nan
     price_index_series = prices.index.to_series()
     previous_signal = new_signals.iloc[0]
+    dt_when_signal_or_zone_changes = new_signals.index[0]
     it = iter(new_signals.iloc[1:-1].items())
     for dt, signal in it:
-        if signal != previous_signal and signal != 0 and limit_price is np.nan:
+        if signal != 0 and limit_price is np.nan:
+            if signal == previous_signal and dt_when_signal_or_zone_changes >= dt:
+                limit_price = np.nan
+                new_signals[dt:dt_when_signal_or_zone_changes] = 0
+
+                new_long_limit_prices[dt:dt_when_signal_or_zone_changes] = np.nan
+                new_long_stop_loss_levels[dt:dt_when_signal_or_zone_changes] = np.nan
+                new_long_profit_target_levels[dt:dt_when_signal_or_zone_changes] = np.nan
+
+                new_short_limit_prices[dt:dt_when_signal_or_zone_changes] = np.nan
+                new_short_stop_loss_levels[dt:dt_when_signal_or_zone_changes] = np.nan
+                new_short_profit_target_levels[dt:dt_when_signal_or_zone_changes] = np.nan
+
+                for _ in prices.loc[dt:dt_when_signal_or_zone_changes].index.to_series().iloc[:-2]:
+                    try:
+                        next(it)
+                    except StopIteration:
+                        break
+
+                previous_signal = 0
+                continue
+
             datetime_starting_from_next_bar = price_index_series.mask(
                 price_index_series <= dt, np.nan
             ).dropna()
@@ -188,31 +265,19 @@ def get_signals_after_limit_price_is_hit(
                     zone_to_be_hit
                 ).idxmax()
 
-            zones_starting_from_this_bar = (
-                long_zones.mask(price_index_series < dt, np.nan).dropna() if signal > 0 else (
-                    short_zones.mask(price_index_series < dt, np.nan).dropna()
-                )
-            )
-            dt_when_zone_changes = zones_starting_from_this_bar.diff().iloc[1:].ne(0).all(axis=1).idxmax()
-
-            signals_starting_from_this_bar = new_signals.mask(price_index_series < dt, np.nan).dropna()
-            dt_when_signal_changes = signals_starting_from_this_bar.diff().iloc[1:].ne(0).idxmax()
-
-            dt_when_signal_or_zone_changes = min(dt_when_signal_changes, dt_when_zone_changes)
-
             if dt_when_zone_was_hit < dt_when_limit_price_was_hit:  # Did not enter trade
                 limit_price = np.nan
-                new_signals[dt:dt_when_signal_or_zone_changes] = 0
+                new_signals[dt:dt_when_zone_was_hit] = 0
 
-                new_long_limit_prices[dt:dt_when_signal_or_zone_changes] = np.nan
-                new_long_stop_loss_levels[dt:dt_when_signal_or_zone_changes] = np.nan
-                new_long_profit_target_levels[dt:dt_when_signal_or_zone_changes] = np.nan
+                new_long_limit_prices[dt:dt_when_zone_was_hit] = np.nan
+                new_long_stop_loss_levels[dt:dt_when_zone_was_hit] = np.nan
+                new_long_profit_target_levels[dt:dt_when_zone_was_hit] = np.nan
 
-                new_short_limit_prices[dt:dt_when_signal_or_zone_changes] = np.nan
-                new_short_stop_loss_levels[dt:dt_when_signal_or_zone_changes] = np.nan
-                new_short_profit_target_levels[dt:dt_when_signal_or_zone_changes] = np.nan
+                new_short_limit_prices[dt:dt_when_zone_was_hit] = np.nan
+                new_short_stop_loss_levels[dt:dt_when_zone_was_hit] = np.nan
+                new_short_profit_target_levels[dt:dt_when_zone_was_hit] = np.nan
 
-                for _ in prices.loc[dt:dt_when_signal_or_zone_changes].index.to_series().iloc[:-1]:
+                for _ in prices.loc[dt:dt_when_zone_was_hit].index.to_series().iloc[:-1]:
                     try:
                         next(it)
                     except StopIteration:
@@ -251,6 +316,18 @@ def get_signals_after_limit_price_is_hit(
                     new_short_limit_prices[dt_when_limit_price_was_hit] = limit_price
                     new_long_limit_prices[dt_when_limit_price_was_hit] = np.nan
 
+                zones_starting_from_this_bar = (
+                    long_zones.mask(price_index_series < dt, np.nan).dropna() if signal > 0 else (
+                        short_zones.mask(price_index_series < dt, np.nan).dropna()
+                    )
+                )
+                dt_when_zone_changes = zones_starting_from_this_bar.diff().iloc[1:].ne(0).any(axis=1).idxmax()
+
+                signals_starting_from_this_bar = new_signals.mask(price_index_series < dt, np.nan).dropna()
+                dt_when_signal_changes = signals_starting_from_this_bar.diff().iloc[1:].ne(0).idxmax()
+
+                dt_when_signal_or_zone_changes = min(dt_when_signal_changes, dt_when_zone_changes)
+
                 previous_signal = signal
                 for _ in prices.loc[dt:dt_when_limit_price_was_hit].index.to_series():
                     try:
@@ -260,31 +337,6 @@ def get_signals_after_limit_price_is_hit(
                 next(it)
 
             limit_price = np.nan
-
-            if signal == previous_signal and signal != 0:   # Signals continue to fire in the same direction after limit price is hit
-                new_signals[dt:dt_when_signal_or_zone_changes] = 0
-
-                new_long_limit_prices[dt:dt_when_signal_or_zone_changes] = np.nan
-                new_short_limit_prices[dt:dt_when_signal_or_zone_changes] = np.nan
-
-                new_long_stop_loss_levels[dt:dt_when_signal_or_zone_changes] = np.nan
-                new_long_profit_target_levels[dt:dt_when_signal_or_zone_changes] = np.nan
-
-                new_short_stop_loss_levels[dt:dt_when_signal_or_zone_changes] = np.nan
-                new_short_profit_target_levels[dt:dt_when_signal_or_zone_changes] = np.nan
-
-                for _ in prices.loc[dt:dt_when_signal_or_zone_changes].index.to_series().iloc[:-1]:
-                    try:
-                        next(it)
-                    except StopIteration:
-                        break
-
-                previous_signal = 0
-                continue
-
-            elif signal != previous_signal and signal != 0:     # Signals started to fire in the opposite direction after limit price is hit
-                ## FIXME write code here
-                pass
 
         previous_signal = signal
 
