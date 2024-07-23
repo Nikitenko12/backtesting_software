@@ -73,10 +73,10 @@ def orion(minute_bars: pd.DataFrame, sessions: Session, big_timeframe='30T', sma
     # short_zone.loc[~may_we_look_for_short_setup.shift(1).fillna(False)] = 0
     # short_zone = long_zone.reindex_like(small_price_bars, method='ffill').replace(0, np.nan)
 
-    small_price_bar_in_long_zone = ~(long_zone[['LOW', 'HIGH']].isna().any()) & (
+    small_price_bar_in_long_zone = (
         (long_zone['LOW'].lt(small_price_bars['LOW'])) & (small_price_bars['LOW'].lt(long_zone['HIGH']))
     )
-    small_price_bar_in_short_zone = ~(short_zone[['LOW', 'HIGH']].isna().any()) & (
+    small_price_bar_in_short_zone = (
         (short_zone['HIGH'].gt(small_price_bars['HIGH'])) & (small_price_bars['HIGH'].gt(short_zone['LOW']))
     )
 
