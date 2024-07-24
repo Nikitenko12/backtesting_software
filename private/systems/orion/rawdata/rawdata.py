@@ -26,10 +26,15 @@ class OrionRawData(SystemStage):
         sessions = self.get_sessions(instrument_code)
 
         datetime = agg_minuteprice.index.to_series()
-        session_end_times = pd.Series([pd.Timestamp(f'{x.date()} {sessions.end_time}') for x in datetime],
-                                      index=datetime.index)
-        session_start_times = pd.Series([pd.Timestamp(f'{x.date()} {sessions.start_time}') for x in datetime],
-                                        index=datetime.index)
+        end_date_for_session = datetime.apply(
+            lambda x: x.date() if x.timetz() < sessions.end_time or (sessions.end_time < sessions.start_time and x.timetz() < sessions.start_time) else x.date() + pd.Timedelta(1, 'D'))
+        start_date_for_session = datetime.apply(
+            lambda x: x.date() if x.timetz() >= sessions.start_time or(sessions.end_time < sessions.start_time and x.timetz() >= sessions.end_time) else x.date() - pd.Timedelta(1, 'D'))
+        session_end_times = pd.Series([pd.Timestamp(f'{x} {sessions.end_time}') for x in end_date_for_session],
+                                      index=end_date_for_session.index)
+        session_start_times = pd.Series([pd.Timestamp(f'{x} {sessions.start_time}') for x in start_date_for_session],
+                                        index=start_date_for_session.index)
+
         agg_minuteprice = agg_minuteprice.loc[
             ~(
                 (

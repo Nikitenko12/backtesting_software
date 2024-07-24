@@ -25,10 +25,14 @@ def orion(minute_bars: pd.DataFrame, sessions: Session, big_timeframe='30T', sma
         }
     )
     datetime_big = big_price_bars.index.to_series()
-    session_end_times_big = pd.Series([pd.Timestamp(f'{x.date()} {sessions.end_time}') for x in datetime_big],
-                                      index=datetime_big.index)
-    session_start_times_big = pd.Series([pd.Timestamp(f'{x.date()} {sessions.start_time}') for x in datetime_big],
-                                        index=datetime_big.index)
+    end_date_for_session_big = datetime_big.apply(
+        lambda x: x.date() if x.timetz() < sessions.end_time or (sessions.end_time < sessions.start_time and x.timetz() < sessions.start_time) else x.date() + pd.Timedelta(1, 'D'))
+    start_date_for_session_big = datetime_big.apply(
+        lambda x: x.date() if x.timetz() >= sessions.start_time or (sessions.end_time < sessions.start_time and x.timetz() >= sessions.end_time) else x.date() - pd.Timedelta(1, 'D'))
+    session_end_times_big = pd.Series([pd.Timestamp(f'{x} {sessions.end_time}') for x in end_date_for_session_big],
+                                  index=end_date_for_session_big.index)
+    session_start_times_big = pd.Series([pd.Timestamp(f'{x} {sessions.start_time}') for x in start_date_for_session_big],
+                                    index=start_date_for_session_big.index)
     big_price_bars = big_price_bars.loc[
         ~(
                 (
@@ -49,10 +53,15 @@ def orion(minute_bars: pd.DataFrame, sessions: Session, big_timeframe='30T', sma
         }
     )
     datetime_small = small_price_bars.index.to_series()
-    session_end_times_small = pd.Series([pd.Timestamp(f'{x.date()} {sessions.end_time}') for x in datetime_small],
-                                        index=datetime_small.index)
-    session_start_times_small = pd.Series([pd.Timestamp(f'{x.date()} {sessions.start_time}') for x in datetime_small],
-                                          index=datetime_small.index)
+    end_date_for_session_small = datetime_small.apply(
+        lambda x: x.date() if x.timetz() < sessions.end_time or (sessions.end_time < sessions.start_time and x.timetz() < sessions.start_time) else x.date() + pd.Timedelta(1, 'D'))
+    start_date_for_session_small = datetime_small.apply(
+        lambda x: x.date() if x.timetz() >= sessions.start_time or (sessions.end_time < sessions.start_time and x.timetz() >= sessions.end_time) else x.date() - pd.Timedelta(1, 'D'))
+    session_end_times_small = pd.Series([pd.Timestamp(f'{x} {sessions.end_time}') for x in end_date_for_session_small],
+                                      index=end_date_for_session_small.index)
+    session_start_times_small = pd.Series(
+        [pd.Timestamp(f'{x} {sessions.start_time}') for x in start_date_for_session_small],
+        index=start_date_for_session_small.index)
     small_price_bars = small_price_bars.loc[
         ~(
                 (
@@ -84,10 +93,12 @@ def orion(minute_bars: pd.DataFrame, sessions: Session, big_timeframe='30T', sma
     eod.iloc[:-1] = datetime.apply(lambda x: x.date()).iloc[:-1].lt(datetime.shift(-1).iloc[:-1].apply(lambda x: x.date()))     # FIXME add sessions, this is incorrect since sessions start the day before
     """
     datetime = small_price_bars.index.to_series()
-    session_end_times = pd.Series([pd.Timestamp(f'{x.date()} {sessions.end_time}') for x in datetime],
-                                  index=datetime.index)
-    session_start_times = pd.Series([pd.Timestamp(f'{x.date()} {sessions.start_time}') for x in datetime],
-                                    index=datetime.index)
+    end_date_for_session = datetime.apply(lambda x: x.date() if x.timetz() < sessions.end_time or (sessions.end_time < sessions.start_time and x.timetz() < sessions.start_time) else x.date() + pd.Timedelta(1, 'D'))
+    start_date_for_session = datetime.apply(lambda x: x.date() if x.timetz() >= sessions.start_time or (sessions.end_time < sessions.start_time and x.timetz() >= sessions.end_time) else x.date() - pd.Timedelta(1, 'D'))
+    session_end_times = pd.Series([pd.Timestamp(f'{x} {sessions.end_time}') for x in end_date_for_session],
+                                  index=end_date_for_session.index)
+    session_start_times = pd.Series([pd.Timestamp(f'{x} {sessions.start_time}') for x in start_date_for_session],
+                                    index=start_date_for_session.index)
 
     eod = pd.Series(False).reindex(small_price_bars.index).fillna(False)
     eod.iloc[:-1] = (datetime.iloc[:-1].le(session_end_times.iloc[:-1])) & (
