@@ -117,87 +117,23 @@ if __name__ == "__main__":
         addplot=new_apds,
     )
 
-    from private.systems.orion.stoplossprofittarget.pathdependency import (
-        get_signals_after_limit_price_is_hit,
-        apply_stop_loss_and_profit_target_to_signals,
-    )
+    from syscore.fileutils import resolve_path_and_filename_for_package
 
-    signals_after_limit_price_is_hit_dict = get_signals_after_limit_price_is_hit(
-        prices=small_price_bars,
-        long_limit_prices=orion_trades['long_limit_prices'],
-        short_limit_prices=orion_trades['short_limit_prices'],
-        signals=orion_trades['signals'],
-        long_zones=orion_trades['long_zones'],
-        short_zones=orion_trades['short_zones'],
-        long_stop_loss_levels=orion_trades['long_stop_loss_prices'],
-        short_stop_loss_levels=orion_trades['short_stop_loss_prices'],
-        long_profit_target_levels=orion_trades['long_profit_taker'],
-        short_profit_target_levels=orion_trades['short_profit_taker'],
-    )
-
-    signals_after_slpt_dict = apply_stop_loss_and_profit_target_to_signals(
-        prices=small_price_bars,
-        signals=signals_after_limit_price_is_hit_dict['signals'],
-        long_stop_loss_levels=signals_after_limit_price_is_hit_dict['new_long_stop_loss_levels'],
-        short_stop_loss_levels=signals_after_limit_price_is_hit_dict['new_short_stop_loss_levels'],
-        long_profit_target_levels=signals_after_limit_price_is_hit_dict['new_long_profit_target_levels'],
-        short_profit_target_levels=signals_after_limit_price_is_hit_dict['new_short_profit_target_levels'],
-        long_limit_prices=signals_after_limit_price_is_hit_dict['new_long_limit_prices'],
-        short_limit_prices=signals_after_limit_price_is_hit_dict['new_short_limit_prices'],
-    )
-
-    #########################################################################################################################
-    mpf.figure()
-
-    new_signals_2 = signals_after_slpt_dict['forecasts']
-    where_values = signals_after_slpt_dict['long_limit_prices_after_slpt'].add(
-        signals_after_slpt_dict['short_limit_prices_after_slpt'], fill_value=0
-    )
-    new_apds = [
-        mpf.make_addplot(small_price_bars['LOW'].where(new_signals_2 > 0, np.nan), type='scatter', marker='^'),
-        mpf.make_addplot(small_price_bars['HIGH'].where(new_signals_2 < 0, np.nan), type='scatter', marker='v'),
-        mpf.make_addplot(signals_after_slpt_dict['long_limit_prices_after_slpt'], type='line', color='blue'),
-        mpf.make_addplot(signals_after_slpt_dict['short_limit_prices_after_slpt'], type='line', color='blue'),
-        mpf.make_addplot(
-            signals_after_slpt_dict['stop_loss_levels_after_slpt'], type='line', color='maroon',
-            fill_between=dict(
-                y1=signals_after_slpt_dict['stop_loss_levels_after_slpt'].values,
-                y2=where_values.values,
-                where=~(where_values.isna()).values,
-                alpha=0.5,
-                color='red'
-            )
-        ),
-        mpf.make_addplot(
-            signals_after_slpt_dict['profit_target_levels_after_slpt'], type='line', color='green',
-            fill_between=dict(
-                y1=signals_after_slpt_dict['profit_target_levels_after_slpt'].values,
-                y2=where_values.values,
-                where=~(where_values.isna()).values,
-                alpha=0.5,
-                color='green'
-            )
-        ),
+    path_dep_df = new_orion_trades['path_dep_df']
+    path_dep_df_summary = path_dep_df[
+        ['signals', 'dt_when_limit_price_was_hit', 'dt_when_stop_loss_was_hit', 'dt_when_profit_target_was_hit', 'dt_when_this_session_ended', 'dt_when_trade_exited']
     ]
-    mpf.plot(
-        small_price_bars.rename(columns=dict(OPEN="Open", HIGH="High", LOW="Low", FINAL="Close")),
-        type='candle',
-        show_nontrading=False,
-        addplot=new_apds,
-    )
+    path_dep_df_summary.to_csv(resolve_path_and_filename_for_package('private.systems.orion.path_dep.csv'))
+
 
     #########################################################################################################################
 
-    import pandas as pd
-
-    price_bars = orion_system.rawdata.get_minute_prices('CL')
-    sessions = orion_system.data.get_sessions_for_instrument('CL')
-
-    orion_rules_result = orion(price_bars, sessions)
-
-    orion_rules_result_df = pd.DataFrame({k: orion_rules_result[k] for k in orion_rules_result if k not in ['long_zones', 'short_zones']})
-
-    signals_after_limit_price_is_hit_df = pd.DataFrame(signals_after_limit_price_is_hit_dict)
-
-    signals_after_slpt_df = pd.DataFrame(signals_after_slpt_dict)
+    # import pandas as pd
+    #
+    # price_bars = orion_system.rawdata.get_minute_prices('CL')
+    # sessions = orion_system.data.get_sessions_for_instrument('CL')
+    #
+    # orion_rules_result = orion(price_bars, sessions)
+    #
+    # orion_rules_result_df = pd.DataFrame({k: orion_rules_result[k] for k in orion_rules_result if k not in ['long_zones', 'short_zones']})
 

@@ -5,6 +5,8 @@ from sysobjects.sessions import Session
 from systems.stage import SystemStage
 from systems.system_cache import input, diagnostic, output
 
+from copy import copy
+
 
 class StopLossProfitTarget(SystemStage):
     """
@@ -60,11 +62,12 @@ class StopLossProfitTarget(SystemStage):
             short_profit_target_levels,
         ) = self.get_inputs(instrument_code)
 
-        signals_after_limit_prices = get_signals_after_limit_price_is_hit(
+        signals_after_limit_prices_slpt = apply_limit_prices_slpt_to_signals(
             prices=prices,
+            signals=signals,
+            sessions=sessions,
             long_limit_prices=long_limit_prices,
             short_limit_prices=short_limit_prices,
-            signals=signals,
             long_zones=long_zones,
             short_zones=short_zones,
             long_stop_loss_levels=long_stop_loss_levels,
@@ -72,19 +75,8 @@ class StopLossProfitTarget(SystemStage):
             long_profit_target_levels=long_profit_target_levels,
             short_profit_target_levels=short_profit_target_levels,
         )
-        updated_signals_dict = apply_stop_loss_and_profit_target_to_signals(
-            prices=prices,
-            sessions=sessions,
-            signals=signals_after_limit_prices['signals'],
-            long_stop_loss_levels=signals_after_limit_prices['new_long_stop_loss_levels'],
-            short_stop_loss_levels=signals_after_limit_prices['new_short_stop_loss_levels'],
-            long_profit_target_levels=signals_after_limit_prices['new_long_profit_target_levels'],
-            short_profit_target_levels=signals_after_limit_prices['new_short_profit_target_levels'],
-            long_limit_prices=signals_after_limit_prices['new_long_limit_prices'],
-            short_limit_prices=signals_after_limit_prices['new_short_limit_prices'],
-        )
 
-        return updated_signals_dict
+        return signals_after_limit_prices_slpt
 
     @property
     def prices(self) -> pd.DataFrame:
@@ -312,9 +304,11 @@ def apply_limit_prices_slpt_to_signals(
         profit_target_levels_after_slpt=profit_target_levels,
         long_limit_prices_after_slpt=new_long_limit_prices,
         short_limit_prices_after_slpt=new_short_limit_prices,
+        path_dep_df=path_dep_df_after_limit_prices,
     )
 
 
+"""
 def get_signals_after_limit_price_is_hit(
     prices: pd.DataFrame,
     long_limit_prices: pd.Series,
@@ -600,7 +594,7 @@ def apply_stop_loss_and_profit_target_to_signals(
         short_limit_prices_after_slpt=short_limit_prices,
     )
 
-
+"""
 if __name__ == "__main__":
     import doctest
 
