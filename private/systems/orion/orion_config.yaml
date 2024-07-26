@@ -12,6 +12,7 @@ trading_rules:
      other_args:
          big_timeframe: '30T'
          small_timeframe: '5T'
+         rr: 2.5
 
 instrument_weights:
   CL: 1.0
