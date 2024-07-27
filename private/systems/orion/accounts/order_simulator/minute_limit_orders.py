@@ -77,18 +77,26 @@ def generate_order_and_fill_at_idx_point_for_limit_orders(
     next_price = data_for_idx.next_price
     if current_position > 0 > quantity:   # Exiting long position
         if current_price <= data_for_idx.stop_loss_level:
-            limit_price = current_price
+            limit_price = None
             fill_datetime = current_datetime
         elif next_price >= data_for_idx.profit_target_level:
             limit_price = data_for_idx.profit_target_level
             market_price = next_price
+            fill_datetime = current_datetime
+        else:   # EOD exit
+            limit_price = None
+            market_price = next_price
 
     elif current_position < 0 < quantity: # Exiting short position
         if current_price >= data_for_idx.stop_loss_level:
-            limit_price = current_price
+            limit_price = None
             fill_datetime = current_datetime
         elif next_price <= data_for_idx.profit_target_level:
             limit_price = data_for_idx.profit_target_level
+            market_price = next_price
+            fill_datetime = current_datetime
+        else:   # EOD exit
+            limit_price = None
             market_price = next_price
 
     simple_order = SimpleOrderWithDate(
