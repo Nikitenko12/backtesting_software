@@ -80,7 +80,7 @@ if __name__ == "__main__":
 
     import pandas as pd
 
-    path_dep_df = forecast_after_slpt_dict.pop('path_dep_df').tz_convert('EST')
+    path_dep_df = forecast_after_slpt_dict.pop('path_dep_df')
 
     new_orion_trades = pd.DataFrame(forecast_after_slpt_dict).tz_convert('EST')
     new_signals = new_orion_trades['forecasts']
@@ -124,12 +124,13 @@ if __name__ == "__main__":
     from syscore.fileutils import resolve_path_and_filename_for_package
 
     path_dep_df_summary = path_dep_df[
-        ['signals', 'dt_when_limit_price_was_hit', 'dt_when_stop_loss_was_hit', 'dt_when_profit_target_was_hit', 'dt_when_this_session_ended', 'dt_when_trade_exited']
-    ].tz_convert('EST')
+        ['signals', 'dt_when_limit_price_was_hit', 'dt_when_zone_changed', 'dt_when_stop_loss_was_hit', 'dt_when_profit_target_was_hit', 'dt_when_this_session_ended', 'dt_when_trade_exited']
+    ]
     path_dep_df_summary.to_csv(resolve_path_and_filename_for_package('private.systems.orion.path_dep.csv'))
 
     order_simulator = orion_system.accounts.get_order_simulator('CL', is_subsystem=True)
 
+    orion_trades_df = pd.DataFrame({k: orion_trades[k] for k in orion_trades if k not in ['long_zones', 'short_zones']}).tz_convert('EST')
 
     #########################################################################################################################
 

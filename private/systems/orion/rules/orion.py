@@ -75,10 +75,10 @@ def orion(minute_bars: pd.DataFrame, sessions: Session, big_timeframe='30T', sma
     may_we_look_for_long_setup = look_for_long_setup(big_price_bars, lookback=setup_lookback)
     may_we_look_for_short_setup = look_for_short_setup(big_price_bars, lookback=setup_lookback)
 
-    long_zone = big_price_bars.shift(1).loc[may_we_look_for_long_setup.shift(1).fillna(False), :].reindex_like(small_price_bars, method='ffill')
+    long_zone = big_price_bars.loc[may_we_look_for_long_setup.fillna(False), :].reindex_like(small_price_bars, method='ffill').shift(1)
     # long_zone.loc[~may_we_look_for_long_setup.shift(1).fillna(False)] = 0
     # long_zone = long_zone.reindex_like(small_price_bars, method='ffill').replace(0, np.nan)
-    short_zone = big_price_bars.shift(1).loc[may_we_look_for_short_setup.shift(1).fillna(False), :].reindex_like(small_price_bars, method='ffill')
+    short_zone = big_price_bars.loc[may_we_look_for_short_setup.fillna(False), :].reindex_like(small_price_bars, method='ffill').shift(1)
     # short_zone.loc[~may_we_look_for_short_setup.shift(1).fillna(False)] = 0
     # short_zone = long_zone.reindex_like(small_price_bars, method='ffill').replace(0, np.nan)
 
@@ -419,7 +419,7 @@ def look_for_long_setup(large_price_bars: pd.DataFrame, lookback: int) -> pd.Ser
 
 
 def look_for_short_setup(large_price_bars: pd.DataFrame, lookback: int) -> pd.Series:
-    return large_price_bars['FINAL'].lt(large_price_bars['LOW'].rolling(lookback).max().shift(1))
+    return large_price_bars['FINAL'].lt(large_price_bars['LOW'].rolling(lookback).min().shift(1))
 
 
 if __name__ == "__main__":
