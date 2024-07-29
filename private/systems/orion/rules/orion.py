@@ -10,6 +10,7 @@ import pandas as pd
 import numpy as np
 
 from sysobjects.sessions import Session
+from private.systems.orion.rawdata.rawdata import apply_sessions_to_aggregated_data
 
 VERY_BIG_NUMBER = 99999999999999999
 
@@ -24,24 +25,7 @@ def orion(minute_bars: pd.DataFrame, sessions: Session, big_timeframe='30T', sma
             'VOLUME': 'sum',
         }
     )
-    datetime_big = big_price_bars.index.to_series()
-    end_date_for_session_big = datetime_big.apply(
-        lambda x: x.date() if x.timetz() < sessions.end_time or (sessions.end_time < sessions.start_time and x.timetz() < sessions.start_time) else x.date() + pd.Timedelta(1, 'D'))
-    start_date_for_session_big = datetime_big.apply(
-        lambda x: x.date() if x.timetz() >= sessions.start_time or (sessions.end_time < sessions.start_time and x.timetz() >= sessions.end_time) else x.date() - pd.Timedelta(1, 'D'))
-    session_end_times_big = pd.Series([pd.Timestamp(f'{x} {sessions.end_time}') for x in end_date_for_session_big],
-                                  index=end_date_for_session_big.index)
-    session_start_times_big = pd.Series([pd.Timestamp(f'{x} {sessions.start_time}') for x in start_date_for_session_big],
-                                    index=start_date_for_session_big.index)
-    big_price_bars = big_price_bars.loc[
-        ~(
-                (
-                    big_price_bars.index.to_series().ge(session_end_times_big)
-                ) & (
-                    big_price_bars.index.to_series().lt(session_start_times_big)
-                )
-        )
-    ]
+    big_price_bars = apply_sessions_to_aggregated_data(big_price_bars, sessions)
 
     small_price_bars = minute_bars.resample(small_timeframe).agg(
         {
@@ -52,33 +36,15 @@ def orion(minute_bars: pd.DataFrame, sessions: Session, big_timeframe='30T', sma
             'VOLUME': 'sum',
         }
     )
-    datetime_small = small_price_bars.index.to_series()
-    end_date_for_session_small = datetime_small.apply(
-        lambda x: x.date() if x.timetz() < sessions.end_time or (sessions.end_time < sessions.start_time and x.timetz() < sessions.start_time) else x.date() + pd.Timedelta(1, 'D'))
-    start_date_for_session_small = datetime_small.apply(
-        lambda x: x.date() if x.timetz() >= sessions.start_time or (sessions.end_time < sessions.start_time and x.timetz() >= sessions.end_time) else x.date() - pd.Timedelta(1, 'D'))
-    session_end_times_small = pd.Series([pd.Timestamp(f'{x} {sessions.end_time}') for x in end_date_for_session_small],
-                                      index=end_date_for_session_small.index)
-    session_start_times_small = pd.Series(
-        [pd.Timestamp(f'{x} {sessions.start_time}') for x in start_date_for_session_small],
-        index=start_date_for_session_small.index)
-    small_price_bars = small_price_bars.loc[
-        ~(
-                (
-                    small_price_bars.index.to_series().ge(session_end_times_small)
-                ) & (
-                    small_price_bars.index.to_series().lt(session_start_times_small)
-                )
-        )
-    ]
+    small_price_bars = apply_sessions_to_aggregated_data(small_price_bars, sessions)
 
     may_we_look_for_long_setup = look_for_long_setup(big_price_bars, lookback=setup_lookback)
     may_we_look_for_short_setup = look_for_short_setup(big_price_bars, lookback=setup_lookback)
 
-    long_zone = big_price_bars.loc[may_we_look_for_long_setup.fillna(False), :].reindex_like(small_price_bars, method='ffill').shift(1)
+    long_zone = big_price_bars.shift(1).loc[may_we_look_for_long_setup.shift(1).fillna(False), :].reindex_like(small_price_bars, method='ffill')
     # long_zone.loc[~may_we_look_for_long_setup.shift(1).fillna(False)] = 0
     # long_zone = long_zone.reindex_like(small_price_bars, method='ffill').replace(0, np.nan)
-    short_zone = big_price_bars.loc[may_we_look_for_short_setup.fillna(False), :].reindex_like(small_price_bars, method='ffill').shift(1)
+    short_zone = big_price_bars.shift(1).loc[may_we_look_for_short_setup.shift(1).fillna(False), :].reindex_like(small_price_bars, method='ffill')
     # short_zone.loc[~may_we_look_for_short_setup.shift(1).fillna(False)] = 0
     # short_zone = long_zone.reindex_like(small_price_bars, method='ffill').replace(0, np.nan)
 

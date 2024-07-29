@@ -4,7 +4,7 @@ import numpy as np
 from sysobjects.sessions import Session
 from systems.stage import SystemStage
 from systems.system_cache import input, diagnostic, output
-
+from private.systems.orion.rawdata.rawdata import apply_sessions_to_aggregated_data
 from copy import copy
 
 
@@ -605,15 +605,6 @@ if __name__ == "__main__":
 
     from private.systems.orion.rules.orion import orion
 
-    # big_price_bars = \
-    # pd.read_csv(get_resolved_pathname('data') + '/COMEX_GC1!, 30.csv', index_col=[0], parse_dates=True)[
-    #     ['open', 'high', 'low', 'close']].rename(columns=dict(open="OPEN", high='HIGH', low='LOW', close='FINAL'))
-    # big_price_bars = big_price_bars.reindex(big_price_bars.index.astype(pd.DatetimeTZDtype(tz='EST')))
-    # small_price_bars = \
-    # pd.read_csv(get_resolved_pathname('data') + '/COMEX_GC1!, 5.csv', index_col=[0], parse_dates=True)[
-    #     ['open', 'high', 'low', 'close']].rename(columns=dict(open="OPEN", high='HIGH', low='LOW', close='FINAL'))
-    # small_price_bars = small_price_bars.reindex(small_price_bars.index.astype(pd.DatetimeTZDtype(tz='EST')))
-
     from sysdata.sim.db_futures_sim_data import dbFuturesSimData
 
     data = dbFuturesSimData()
@@ -632,6 +623,8 @@ if __name__ == "__main__":
             'VOLUME': 'sum',
         }
     )
+    small_price_bars = apply_sessions_to_aggregated_data(small_price_bars, sessions)
+
     big_price_bars = price_bars.resample('30T').agg(
         {
             'OPEN': 'first',
@@ -641,38 +634,9 @@ if __name__ == "__main__":
             'VOLUME': 'sum',
         }
     )
+    big_price_bars = apply_sessions_to_aggregated_data(big_price_bars, sessions)
 
-    datetime_big = big_price_bars.index.to_series()
-    session_end_times_big = pd.Series([pd.Timestamp(f'{x.date()} {sessions.end_time}') for x in datetime_big],
-                                      index=datetime_big.index)
-    session_start_times_big = pd.Series([pd.Timestamp(f'{x.date()} {sessions.start_time}') for x in datetime_big],
-                                        index=datetime_big.index)
-    big_price_bars = big_price_bars.loc[
-        ~(
-                (
-                    big_price_bars.index.to_series().ge(session_end_times_big)
-                ) & (
-                    big_price_bars.index.to_series().lt(session_start_times_big)
-                )
-        )
-    ]
-
-    datetime_small = small_price_bars.index.to_series()
-    session_end_times_small = pd.Series([pd.Timestamp(f'{x.date()} {sessions.end_time}') for x in datetime_small],
-                                  index=datetime_small.index)
-    session_start_times_small = pd.Series([pd.Timestamp(f'{x.date()} {sessions.start_time}') for x in datetime_small],
-                                    index=datetime_small.index)
-    small_price_bars = small_price_bars.loc[
-        ~(
-                (
-                    small_price_bars.index.to_series().ge(session_end_times_small)
-                ) & (
-                    small_price_bars.index.to_series().lt(session_start_times_small)
-                )
-        )
-    ]
-
-    orion_trades = orion(price_bars, sessions)
+    orion_trades = orion(price_bars, sessions, rr=2.5)
     signals = orion_trades['signals']
 
     # apds = [

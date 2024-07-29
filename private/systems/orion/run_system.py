@@ -37,7 +37,8 @@ if __name__ == "__main__":
 
     import matplotlib.pyplot as plt
 
-    orion_portfolio.percent.curve().plot()
+    plt.figure()
+    orion_portfolio.curve().plot()
     plt.show()
 
     subsystem_position = orion_system.positionSize.get_subsystem_position('CL')
@@ -125,8 +126,16 @@ if __name__ == "__main__":
 
     path_dep_df_summary = path_dep_df[
         ['signals', 'dt_when_limit_price_was_hit', 'dt_when_zone_changed', 'dt_when_stop_loss_was_hit', 'dt_when_profit_target_was_hit', 'dt_when_this_session_ended', 'dt_when_trade_exited']
-    ]
-    path_dep_df_summary.to_csv(resolve_path_and_filename_for_package('private.systems.orion.path_dep.csv'))
+    ].tz_convert('EST')
+
+    path_dep_df_summary['dt_when_limit_price_was_hit'] = [x.tz_convert('EST') for x in path_dep_df_summary['dt_when_limit_price_was_hit']]
+    path_dep_df_summary['dt_when_zone_changed'] = [x.tz_convert('EST') for x in path_dep_df_summary['dt_when_zone_changed']]
+    path_dep_df_summary['dt_when_stop_loss_was_hit'] = [x.tz_convert('EST') for x in path_dep_df_summary['dt_when_stop_loss_was_hit']]
+    path_dep_df_summary['dt_when_profit_target_was_hit'] = [x.tz_convert('EST') for x in path_dep_df_summary['dt_when_profit_target_was_hit']]
+    path_dep_df_summary['dt_when_this_session_ended'] = [x.tz_convert('EST') for x in path_dep_df_summary['dt_when_this_session_ended']]
+    path_dep_df_summary['dt_when_trade_exited'] = [x.tz_convert('EST') for x in path_dep_df_summary['dt_when_trade_exited']]
+
+    path_dep_df_summary.to_csv(resolve_path_and_filename_for_package('private.systems.orion.path_dep.csv'), sep='\t')
 
     order_simulator = orion_system.accounts.get_order_simulator('CL', is_subsystem=True)
 
@@ -139,7 +148,7 @@ if __name__ == "__main__":
     # price_bars = orion_system.rawdata.get_minute_prices('CL')
     # sessions = orion_system.data.get_sessions_for_instrument('CL')
     #
-    # orion_rules_result = orion(price_bars, sessions)
+    # orion_rules_result = orion(price_bars, sessions, rr=2.5)
     #
     # orion_rules_result_df = pd.DataFrame({k: orion_rules_result[k] for k in orion_rules_result if k not in ['long_zones', 'short_zones']})
 

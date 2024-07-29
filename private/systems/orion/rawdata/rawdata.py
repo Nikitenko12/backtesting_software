@@ -9,6 +9,8 @@ from syscore.dateutils import BUSINESS_DAYS_IN_YEAR
 
 from syscore.exceptions import missingData
 
+from sysobjects.sessions import Session
+
 
 class OrionRawData(SystemStage):
     def get_aggregated_minute_prices(self, instrument_code: str, barsize: str = '5T'):
@@ -24,26 +26,7 @@ class OrionRawData(SystemStage):
         )
 
         sessions = self.get_sessions(instrument_code)
-
-        datetime = agg_minuteprice.index.to_series()
-        end_date_for_session = datetime.apply(
-            lambda x: x.date() if x.timetz() < sessions.end_time or (sessions.end_time < sessions.start_time and x.timetz() < sessions.start_time) else x.date() + pd.Timedelta(1, 'D'))
-        start_date_for_session = datetime.apply(
-            lambda x: x.date() if x.timetz() >= sessions.start_time or(sessions.end_time < sessions.start_time and x.timetz() >= sessions.end_time) else x.date() - pd.Timedelta(1, 'D'))
-        session_end_times = pd.Series([pd.Timestamp(f'{x} {sessions.end_time}') for x in end_date_for_session],
-                                      index=end_date_for_session.index)
-        session_start_times = pd.Series([pd.Timestamp(f'{x} {sessions.start_time}') for x in start_date_for_session],
-                                        index=start_date_for_session.index)
-
-        agg_minuteprice = agg_minuteprice.loc[
-            ~(
-                (
-                    agg_minuteprice.index.to_series().ge(session_end_times)
-                ) & (
-                    agg_minuteprice.index.to_series().lt(session_start_times)
-                )
-            )
-        ]
+        agg_minuteprice = apply_sessions_to_aggregated_data(agg_minuteprice, sessions)
 
         return agg_minuteprice
 
@@ -168,3 +151,36 @@ class OrionRawData(SystemStage):
     #         )
     #
     #     return natural_prices
+
+
+def apply_sessions_to_aggregated_data(agg_price: pd.DataFrame, sessions: Session):
+    agg_price_index_in_sessions_tz = agg_price.index.tz_convert(sessions.tzinfo).to_series()
+
+    end_date_for_session = agg_price_index_in_sessions_tz.apply(
+        lambda x: x.date() if x.time() < sessions.end_time or (
+                sessions.end_time < sessions.start_time and x.time() < sessions.start_time) else
+        x.date() + pd.Timedelta(1, 'D')
+    )
+    start_date_for_session = agg_price_index_in_sessions_tz.apply(
+        lambda x: x.date() if x.time() >= sessions.start_time or (
+                sessions.end_time < sessions.start_time and x.time() >= sessions.end_time) else
+        x.date() - pd.Timedelta(1, 'D')
+    )
+    session_end_times = pd.Series(
+        [pd.Timestamp(f'{x} {sessions.end_time}', tzinfo=sessions.tzinfo) for x in end_date_for_session],
+        index=end_date_for_session.index)
+    session_start_times = pd.Series(
+        [pd.Timestamp(f'{x} {sessions.start_time}', tzinfo=sessions.tzinfo) for x in start_date_for_session],
+        index=start_date_for_session.index)
+
+    agg_price = agg_price.loc[
+        ~(
+                (
+                    agg_price.index.to_series().ge(session_end_times)
+                ) & (
+                    agg_price.index.to_series().lt(session_start_times)
+                )
+        )
+    ]
+
+    return agg_price

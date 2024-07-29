@@ -6,6 +6,7 @@ from syslogging.logger import *
 
 import pandas as pd
 from datetime import time
+import pytz
 
 SESSIONS_DATAPATH = "data.futures.csvconfig"
 SESSIONS_CONFIG_FILE = "sessions.csv"
@@ -29,6 +30,9 @@ class allSessions(pd.DataFrame):
             sessions_data['SessionEndTime'] = (
                 [time.fromisoformat(end_time) for end_time in sessions_data['SessionEndTime']]
             )
+            sessions_data['Timezone'] = (
+                pytz.timezone(tz) for tz in sessions_data['Timezone']
+            )
 
         except BaseException:
             raise Exception("Badly configured file %s" % (filename))
@@ -45,6 +49,7 @@ class allSessions(pd.DataFrame):
         sessions_object = Session(
             start_time=config_for_this_instrument.SessionStartTime,
             end_time=config_for_this_instrument.SessionEndTime,
+            tz=config_for_this_instrument.Timezone
         )
 
         return sessions_object
@@ -54,6 +59,7 @@ class allSessions(pd.DataFrame):
     ):
         self.at[instrument_code, "SessionStartTime"] = session.start_time
         self.at[instrument_code, "SessionEndTime"] = session.end_time
+        self.at[instrument_code, "Timezone"] = session.tzinfo
 
     def write_to_file(self, filename: str):
         self.to_csv(filename, index_label="Instrument")
