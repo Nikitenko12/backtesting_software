@@ -31,7 +31,7 @@ class allSessions(pd.DataFrame):
                 [time.fromisoformat(end_time) for end_time in sessions_data['SessionEndTime']]
             )
             sessions_data['Timezone'] = (
-                pytz.timezone(tz) for tz in sessions_data['Timezone']
+                [pytz.timezone(tz) for tz in sessions_data['Timezone']]
             )
 
         except BaseException:

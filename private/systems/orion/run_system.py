@@ -141,6 +141,8 @@ if __name__ == "__main__":
 
     orion_trades_df = pd.DataFrame({k: orion_trades[k] for k in orion_trades if k not in ['long_zones', 'short_zones']}).tz_convert('EST')
 
+    diagnostic_df = order_simulator.diagnostic_df()
+
     #########################################################################################################################
 
     # import pandas as pd

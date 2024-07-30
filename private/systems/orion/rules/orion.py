@@ -58,9 +58,18 @@ def orion(minute_bars: pd.DataFrame, sessions: Session, big_timeframe='30T', sma
     """
     eod.iloc[:-1] = datetime.apply(lambda x: x.date()).iloc[:-1].lt(datetime.shift(-1).iloc[:-1].apply(lambda x: x.date()))     # FIXME add sessions, this is incorrect since sessions start the day before
     """
-    datetime = small_price_bars.index.to_series()
+    datetime = small_price_bars.index.tz_convert(sessions.tzinfo).to_series()
+    end_date_for_session = datetime.apply(
+        lambda x: x.date() if x.time() < sessions.end_time or (
+                sessions.end_time < sessions.start_time and x.time() < sessions.start_time) else
+        x.date() + pd.Timedelta(1, 'D')
+    )
+    session_end_times = pd.Series(
+        [pd.Timestamp(f'{x} {sessions.end_time}', tzinfo=sessions.tzinfo) for x in end_date_for_session],
+        index=end_date_for_session.index
+    )
 
-    eod = datetime.asof(session_end_times_small.loc[datetime]).drop_duplicates()
+    eod = datetime.asof(session_end_times.loc[datetime]).drop_duplicates()
     eod = pd.Series([x in eod.values for x in datetime.values], index=datetime.index)
 
     stop_looking_for_long_setup = (small_price_bars['FINAL'] < long_zone['LOW']) | eod
@@ -75,8 +84,8 @@ def orion(minute_bars: pd.DataFrame, sessions: Session, big_timeframe='30T', sma
     long_setup = small_price_bars['FINAL'] > long_fractal_prices
     short_setup = small_price_bars['FINAL'] < short_fractal_prices
 
-    long_setup_groups = small_price_bars.loc[small_price_bar_in_long_zone, 'HIGH'].reindex_like(small_price_bars['HIGH'], method='ffill')
-    short_setup_groups = small_price_bars.loc[small_price_bar_in_short_zone, 'LOW'].reindex_like(small_price_bars['LOW'], method='ffill')
+    long_setup_groups = small_price_bars.loc[small_price_bar_in_long_zone, 'LOW'].reindex_like(small_price_bars['LOW'], method='ffill')
+    short_setup_groups = small_price_bars.loc[small_price_bar_in_short_zone, 'HIGH'].reindex_like(small_price_bars['HIGH'], method='ffill')
 
     lowest_low_since_began_looking_for_setup = small_price_bars.loc[
         small_price_bars['LOW'] == small_price_bars['LOW'].groupby(long_setup_groups).cummin(), 'LOW'
@@ -381,11 +390,11 @@ def bars_since(series: pd.Series):
 
 
 def look_for_long_setup(large_price_bars: pd.DataFrame, lookback: int) -> pd.Series:
-    return large_price_bars['FINAL'].gt(large_price_bars['HIGH'].rolling(lookback).max().shift(1))
+    return large_price_bars['FINAL'].lt(large_price_bars['LOW'].rolling(lookback).min().shift(1))
 
 
 def look_for_short_setup(large_price_bars: pd.DataFrame, lookback: int) -> pd.Series:
-    return large_price_bars['FINAL'].lt(large_price_bars['LOW'].rolling(lookback).min().shift(1))
+    return large_price_bars['FINAL'].gt(large_price_bars['HIGH'].rolling(lookback).max().shift(1))
 
 
 if __name__ == "__main__":

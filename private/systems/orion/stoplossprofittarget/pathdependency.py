@@ -112,8 +112,9 @@ def apply_limit_prices_slpt_to_signals(
     long_profit_target_levels: pd.Series,
     short_profit_target_levels: pd.Series,
 ):
-
+    assert prices.index.tz == sessions.tzinfo
     price_index_series = prices.index.to_series()
+
     trades = signals.loc[signals.ne(0)]
     it = iter(trades.items())
 
@@ -193,13 +194,13 @@ def apply_limit_prices_slpt_to_signals(
             dt_when_stop_loss_was_hit = pd.NaT if stop_loss_was_hit.eq(False).all() else stop_loss_was_hit.idxmax()
             dt_when_profit_target_was_hit = pd.NaT if profit_target_was_hit.eq(False).all() else profit_target_was_hit.idxmax()
 
-            date_when_this_session_ended = dt_when_limit_price_was_hit.date() if dt_when_limit_price_was_hit.timetz() < sessions.end_time or (
-                sessions.end_time < sessions.start_time and dt_when_limit_price_was_hit.timetz() < sessions.start_time
+            date_when_this_session_ended = dt_when_limit_price_was_hit.date() if dt_when_limit_price_was_hit.time() < sessions.end_time or (
+                sessions.end_time < sessions.start_time and dt_when_limit_price_was_hit.time() < sessions.start_time
             ) else (
                 dt_when_limit_price_was_hit.date() + pd.Timedelta(1, 'D')
             )
             dt_when_this_session_ended = (
-                pd.Timestamp(f'{date_when_this_session_ended} {sessions.end_time}').tz_convert(tz=price_index_series.index.tz)
+                pd.Timestamp(f'{date_when_this_session_ended} {sessions.end_time}').tz_localize(tz=price_index_series.index.tz)
             )
             next_session = price_index_series.loc[price_index_series.asof(dt_when_this_session_ended):]
             dt_for_first_bar_in_next_session = pd.NaT if len(next_session) <= 1 else next_session.iloc[1]
