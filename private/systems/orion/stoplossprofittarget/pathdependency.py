@@ -68,8 +68,6 @@ class StopLossProfitTarget(SystemStage):
             sessions=sessions,
             long_limit_prices=long_limit_prices,
             short_limit_prices=short_limit_prices,
-            long_zones=long_zones,
-            short_zones=short_zones,
             long_stop_loss_levels=long_stop_loss_levels,
             short_stop_loss_levels=short_stop_loss_levels,
             long_profit_target_levels=long_profit_target_levels,
@@ -99,6 +97,180 @@ class StopLossProfitTarget(SystemStage):
         return self.parent.rawdata.get_sessions(instrument_code)
 
 
+def apply_limit_prices_slpt_to_signals(
+    prices: pd.DataFrame,
+    sessions: Session,
+    signals: pd.Series,
+    long_limit_prices: pd.Series,
+    short_limit_prices: pd.Series,
+    long_stop_loss_levels: pd.Series,
+    short_stop_loss_levels: pd.Series,
+    long_profit_target_levels: pd.Series,
+    short_profit_target_levels: pd.Series,
+):
+    assert prices.index.tz == sessions.tzinfo
+    price_index_series = prices.index.to_series()
+
+    trades = signals.loc[signals.ne(0)]
+    it = iter(trades.items())
+
+    path_dep_df = pd.DataFrame(
+        columns=[
+            'signals', 'dt_when_limit_price_was_hit',
+            'dt_when_stop_loss_was_hit', 'dt_when_profit_target_was_hit',
+            'dt_when_this_session_ended', 'dt_for_first_bar_in_next_session',
+            'dt_when_trade_exited',
+        ],
+        index=trades.index,
+    )
+
+    for dt, signal in it:
+        datetime_starting_from_next_bar = price_index_series.mask(
+            price_index_series <= dt, np.nan
+        ).dropna()
+        if len(datetime_starting_from_next_bar) == 0:
+            break
+
+        if signal > 0:
+            limit_price = long_limit_prices.loc[dt]
+            limit_price_was_hit = prices.loc[datetime_starting_from_next_bar, 'LOW'].le(limit_price)
+            dt_when_limit_price_was_hit = pd.NaT if limit_price_was_hit.eq(
+                False).all() else limit_price_was_hit.idxmax()
+
+            stop_loss_level = long_stop_loss_levels[dt]
+            profit_target_level = long_profit_target_levels[dt]
+
+        else:
+            limit_price = short_limit_prices.loc[dt]
+            limit_price_was_hit = prices.loc[datetime_starting_from_next_bar, 'HIGH'].ge(limit_price)
+            dt_when_limit_price_was_hit = pd.NaT if limit_price_was_hit.eq(
+                False).all() else limit_price_was_hit.idxmax()
+
+            stop_loss_level = short_stop_loss_levels[dt]
+            profit_target_level = short_profit_target_levels[dt]
+
+        if dt_when_limit_price_was_hit is not pd.NaT:
+            datetime_starting_from_bar_when_limit_price_was_hit = price_index_series.mask(
+                price_index_series <= dt_when_limit_price_was_hit, np.nan
+            ).dropna()
+            if signal > 0:
+                stop_loss_was_hit = prices.loc[datetime_starting_from_bar_when_limit_price_was_hit, 'LOW'].le(
+                    stop_loss_level)
+                profit_target_was_hit = prices.loc[datetime_starting_from_bar_when_limit_price_was_hit, 'HIGH'].ge(
+                    profit_target_level)
+            else:
+                stop_loss_was_hit = prices.loc[datetime_starting_from_bar_when_limit_price_was_hit, 'HIGH'].ge(
+                    stop_loss_level)
+                profit_target_was_hit = prices.loc[datetime_starting_from_bar_when_limit_price_was_hit, 'LOW'].le(
+                    profit_target_level)
+
+            dt_when_stop_loss_was_hit = pd.NaT if stop_loss_was_hit.eq(False).all() else stop_loss_was_hit.idxmax()
+            dt_when_profit_target_was_hit = pd.NaT if profit_target_was_hit.eq(False).all() else profit_target_was_hit.idxmax()
+
+            date_when_this_session_ended = dt_when_limit_price_was_hit.date() if dt_when_limit_price_was_hit.time() < sessions.end_time or (
+                sessions.end_time < sessions.start_time and dt_when_limit_price_was_hit.time() < sessions.start_time
+            ) else (
+                dt_when_limit_price_was_hit.date() + pd.Timedelta(1, 'D')
+            )
+            dt_when_this_session_ended = (
+                pd.Timestamp(f'{date_when_this_session_ended} {sessions.end_time}').tz_localize(tz=price_index_series.index.tz)
+            )
+            next_session = price_index_series.loc[price_index_series.asof(dt_when_this_session_ended):]
+            dt_for_first_bar_in_next_session = pd.NaT if len(next_session) <= 1 else next_session.iloc[1]
+
+        else:
+            dt_when_stop_loss_was_hit = pd.NaT
+            dt_when_profit_target_was_hit = pd.NaT
+            dt_when_this_session_ended = pd.NaT
+            dt_for_first_bar_in_next_session = pd.NaT
+
+        when_trade_exited = pd.Series(
+            [dt_when_stop_loss_was_hit, dt_when_profit_target_was_hit, dt_when_this_session_ended]
+        ).dropna()
+        dt_when_trade_exited = pd.NaT if len(when_trade_exited) == 0 else when_trade_exited.min()
+
+        path_dep_df.loc[dt, 'signals'] = signal
+        path_dep_df.loc[dt, 'dt_when_limit_price_was_hit'] = dt_when_limit_price_was_hit
+        path_dep_df.loc[dt, 'dt_when_stop_loss_was_hit'] = dt_when_stop_loss_was_hit
+        path_dep_df.loc[dt, 'dt_when_profit_target_was_hit'] = dt_when_profit_target_was_hit
+        path_dep_df.loc[dt, 'dt_when_this_session_ended'] = dt_when_this_session_ended
+        path_dep_df.loc[dt, 'dt_for_first_bar_in_next_session'] = dt_for_first_bar_in_next_session
+        path_dep_df.loc[dt, 'dt_when_trade_exited'] = dt_when_trade_exited
+
+    trades_which_hit_limit_prices = ~(path_dep_df.dt_when_limit_price_was_hit.eq(pd.NaT))
+    path_dep_df_after_limit_prices = path_dep_df.loc[trades_which_hit_limit_prices].copy()
+
+    previous_row = path_dep_df_after_limit_prices.iloc[0]
+    it = iter(path_dep_df_after_limit_prices.iloc[1:].iterrows())
+    for dt, row in it:
+        if dt <= previous_row.dt_when_trade_exited:
+            path_dep_df_after_limit_prices.drop(index=dt, inplace=True)
+        else:
+            previous_row = row.copy()
+
+    next_session_if_exited_trade_at_eod = path_dep_df_after_limit_prices.loc[
+        path_dep_df_after_limit_prices.dt_when_trade_exited == path_dep_df_after_limit_prices.dt_when_this_session_ended,
+        'dt_for_first_bar_in_next_session'
+    ]
+
+    forecasts = pd.Series(0).reindex_like(price_index_series)
+    forecasts[path_dep_df_after_limit_prices.dt_when_limit_price_was_hit] = signals[path_dep_df_after_limit_prices.index]
+    forecasts[price_index_series.asof(path_dep_df_after_limit_prices.dt_when_trade_exited)] = 0
+    forecasts[next_session_if_exited_trade_at_eod] = 0
+    forecasts = forecasts.ffill().fillna(0)
+
+    new_long_limit_prices = pd.Series(np.nan).reindex_like(price_index_series)
+    new_long_limit_prices[
+        path_dep_df_after_limit_prices.dt_when_limit_price_was_hit[path_dep_df_after_limit_prices.signals > 0]
+    ] = long_limit_prices.loc[path_dep_df_after_limit_prices.loc[path_dep_df_after_limit_prices.signals > 0].index]
+    new_long_limit_prices[
+        price_index_series.asof(path_dep_df_after_limit_prices.dt_when_trade_exited[path_dep_df_after_limit_prices.signals > 0])
+    ] = 0
+    new_long_limit_prices[next_session_if_exited_trade_at_eod] = 0
+    new_long_limit_prices = new_long_limit_prices.ffill().replace(0, np.nan)
+
+    new_short_limit_prices = pd.Series(np.nan).reindex_like(price_index_series)
+    new_short_limit_prices[
+        path_dep_df_after_limit_prices.dt_when_limit_price_was_hit[path_dep_df_after_limit_prices.signals < 0]
+    ] = short_limit_prices.loc[path_dep_df_after_limit_prices.loc[path_dep_df_after_limit_prices.signals < 0].index]
+    new_short_limit_prices[
+        price_index_series.asof(path_dep_df_after_limit_prices.dt_when_trade_exited[path_dep_df_after_limit_prices.signals < 0])
+    ] = 0
+    new_short_limit_prices[next_session_if_exited_trade_at_eod] = 0
+    new_short_limit_prices = new_short_limit_prices.ffill().replace(0, np.nan)
+
+    stop_loss_levels = pd.Series(np.nan).reindex_like(price_index_series)
+    stop_loss_levels[
+        path_dep_df_after_limit_prices.dt_when_limit_price_was_hit[path_dep_df_after_limit_prices.signals > 0]
+    ] = long_stop_loss_levels.loc[path_dep_df_after_limit_prices.loc[path_dep_df_after_limit_prices.signals > 0].index]
+    stop_loss_levels[
+        path_dep_df_after_limit_prices.dt_when_limit_price_was_hit[path_dep_df_after_limit_prices.signals < 0]
+    ] = short_stop_loss_levels.loc[path_dep_df_after_limit_prices.loc[path_dep_df_after_limit_prices.signals < 0].index]
+    stop_loss_levels[price_index_series.asof(path_dep_df_after_limit_prices.dt_when_trade_exited)] = 0
+    stop_loss_levels[next_session_if_exited_trade_at_eod] = 0
+    stop_loss_levels = stop_loss_levels.ffill().replace(0, np.nan)
+
+    profit_target_levels = pd.Series(np.nan).reindex_like(price_index_series)
+    profit_target_levels[
+        path_dep_df_after_limit_prices.dt_when_limit_price_was_hit[path_dep_df_after_limit_prices.signals > 0]
+    ] = long_profit_target_levels.loc[path_dep_df_after_limit_prices.loc[path_dep_df_after_limit_prices.signals > 0].index]
+    profit_target_levels[
+        path_dep_df_after_limit_prices.dt_when_limit_price_was_hit[path_dep_df_after_limit_prices.signals < 0]
+    ] = short_profit_target_levels.loc[path_dep_df_after_limit_prices.loc[path_dep_df_after_limit_prices.signals < 0].index]
+    profit_target_levels[price_index_series.asof(path_dep_df_after_limit_prices.dt_when_trade_exited)] = 0
+    profit_target_levels[next_session_if_exited_trade_at_eod] = 0
+    profit_target_levels = profit_target_levels.ffill().replace(0, np.nan)
+
+    return dict(
+        forecasts=forecasts,
+        stop_loss_levels_after_slpt=stop_loss_levels,
+        profit_target_levels_after_slpt=profit_target_levels,
+        long_limit_prices_after_slpt=new_long_limit_prices,
+        short_limit_prices_after_slpt=new_short_limit_prices,
+        path_dep_df=path_dep_df_after_limit_prices,
+    )
+
+"""
 def apply_limit_prices_slpt_to_signals(
     prices: pd.DataFrame,
     sessions: Session,
@@ -142,9 +314,9 @@ def apply_limit_prices_slpt_to_signals(
                 False).all() else limit_price_was_hit.idxmax()
 
             zone_to_be_hit = short_zones.loc[
-                datetime_starting_from_next_bar.loc[:dt_when_limit_price_was_hit], 'HIGH'].cummax()
+                datetime_starting_from_next_bar.loc[:dt_when_limit_price_was_hit], 'LOW'].cummin()
             zone_was_hit = prices.loc[
-                datetime_starting_from_next_bar.loc[:dt_when_limit_price_was_hit], 'LOW'].le(
+                datetime_starting_from_next_bar.loc[:dt_when_limit_price_was_hit], 'HIGH'].ge(
                 zone_to_be_hit
             )
 
@@ -160,9 +332,9 @@ def apply_limit_prices_slpt_to_signals(
                 False).all() else limit_price_was_hit.idxmax()
 
             zone_to_be_hit = long_zones.loc[
-                datetime_starting_from_next_bar.loc[:dt_when_limit_price_was_hit], 'LOW'].cummin()
+                datetime_starting_from_next_bar.loc[:dt_when_limit_price_was_hit], 'HIGH'].cummax()
             zone_was_hit = prices.loc[
-                datetime_starting_from_next_bar.loc[:dt_when_limit_price_was_hit], 'HIGH'].ge(
+                datetime_starting_from_next_bar.loc[:dt_when_limit_price_was_hit], 'LOW'].le(
                 zone_to_be_hit
             )
 
@@ -308,7 +480,7 @@ def apply_limit_prices_slpt_to_signals(
         path_dep_df=path_dep_df_after_limit_prices,
     )
 
-
+"""
 """
 def get_signals_after_limit_price_is_hit(
     prices: pd.DataFrame,
@@ -685,8 +857,6 @@ if __name__ == "__main__":
         sessions=sessions,
         long_limit_prices=orion_trades['long_limit_prices'],
         short_limit_prices=orion_trades['short_limit_prices'],
-        long_zones=orion_trades['long_zones'],
-        short_zones=orion_trades['short_zones'],
         long_stop_loss_levels=orion_trades['long_stop_loss_prices'],
         short_stop_loss_levels=orion_trades['short_stop_loss_prices'],
         long_profit_target_levels=orion_trades['long_profit_taker'],

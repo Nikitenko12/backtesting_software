@@ -38,6 +38,180 @@ def orion(minute_bars: pd.DataFrame, sessions: Session, big_timeframe='30T', sma
     )
     small_price_bars = apply_sessions_to_aggregated_data(small_price_bars, sessions)
 
+    print("******* Calculating supply and demand zones *******")
+    may_we_look_for_long_setup = look_for_long_setup(big_price_bars, lookback=setup_lookback)
+    may_we_look_for_short_setup = look_for_short_setup(big_price_bars, lookback=setup_lookback)
+
+    demand_zones = big_price_bars.shift(1).loc[may_we_look_for_long_setup.shift(1).fillna(False), ['HIGH', 'LOW']]
+    supply_zones = big_price_bars.shift(1).loc[may_we_look_for_short_setup.shift(1).fillna(False), ['HIGH', 'LOW']]
+
+    when_price_hit_which_demand_zone = pd.Series([[]] * len(small_price_bars.index), index=small_price_bars.index)
+    when_price_hit_which_supply_zone = when_price_hit_which_demand_zone.copy()
+
+    print("******* Checking when prices entered demand zones *******")
+    for zone_dt, zone in demand_zones.iterrows():
+        when_price_exits_zone_first = big_price_bars.loc[zone_dt:, 'OPEN'].gt(zone.HIGH)
+        dt_when_price_exits_zone_first = pd.NaT if not when_price_exits_zone_first.any() else when_price_exits_zone_first.idxmax()
+
+        if dt_when_price_exits_zone_first is not pd.NaT:
+            dt_when_to_cancel_zone = small_price_bars.loc[dt_when_price_exits_zone_first:, 'FINAL'].lt(zone.LOW)
+            dt_when_to_cancel_zone = small_price_bars.index[-1] if not dt_when_to_cancel_zone.any() else dt_when_to_cancel_zone.idxmax()
+
+            did_price_hit_this_demand_zone = (
+                small_price_bars.loc[dt_when_price_exits_zone_first:dt_when_to_cancel_zone, 'LOW'].gt(zone.LOW) & (
+                    small_price_bars.loc[dt_when_price_exits_zone_first:dt_when_to_cancel_zone, 'LOW'].lt(zone.HIGH)
+                )
+            )
+            did_price_hit_this_demand_zone = did_price_hit_this_demand_zone.loc[did_price_hit_this_demand_zone]
+            dt_when_price_hit_this_demand_zone = did_price_hit_this_demand_zone.index
+
+            for idx in dt_when_price_hit_this_demand_zone:
+                when_price_hit_which_demand_zone.loc[idx].append((zone_dt, dt_when_price_exits_zone_first, dt_when_to_cancel_zone))
+
+    print("******* Checking when prices entered supply zones *******")
+    for zone_dt, zone in supply_zones.iterrows():
+        when_price_exits_zone_first = big_price_bars.loc[zone_dt:, 'OPEN'].lt(zone.LOW)
+        dt_when_price_exits_zone_first = pd.NaT if not when_price_exits_zone_first.any() else when_price_exits_zone_first.idxmax()
+
+        if dt_when_price_exits_zone_first is not pd.NaT:
+            dt_when_to_cancel_zone = small_price_bars.loc[dt_when_price_exits_zone_first:, 'FINAL'].gt(zone.HIGH)
+            dt_when_to_cancel_zone = small_price_bars.index[-1] if not dt_when_to_cancel_zone.any() else dt_when_to_cancel_zone.idxmax()
+
+            did_price_hit_this_supply_zone = (
+                small_price_bars.loc[dt_when_price_exits_zone_first:dt_when_to_cancel_zone, 'LOW'].gt(zone.LOW) & (
+                    small_price_bars.loc[dt_when_price_exits_zone_first:dt_when_to_cancel_zone, 'LOW'].lt(zone.HIGH)
+                )
+            )
+            did_price_hit_this_supply_zone = did_price_hit_this_supply_zone.loc[did_price_hit_this_supply_zone]
+            dt_when_price_hit_this_supply_zone = did_price_hit_this_supply_zone.index
+
+            for idx in dt_when_price_hit_this_supply_zone:
+                when_price_hit_which_supply_zone.loc[idx].append((zone_dt, dt_when_price_exits_zone_first, dt_when_to_cancel_zone))
+
+    when_price_hit_which_demand_zone = when_price_hit_which_demand_zone.loc[[len(x) > 0 for x in when_price_hit_which_demand_zone]]
+    when_price_hit_which_supply_zone = when_price_hit_which_supply_zone.loc[[len(x) > 0 for x in when_price_hit_which_supply_zone]]
+
+    print("******* Calculating fractals *******")
+    fractals = rachel_t_fractals(small_price_bars)
+    long_fractals = fractals < 0
+    short_fractals = fractals > 0
+    long_fractal_prices = small_price_bars.loc[long_fractals, 'HIGH'].reindex_like(small_price_bars['HIGH'])
+    short_fractal_prices = small_price_bars.loc[short_fractals, 'LOW'].reindex_like(small_price_bars['LOW'])
+
+    long_signals = pd.Series(False).reindex_like(small_price_bars['FINAL'])
+    short_signals = long_signals.copy()
+
+    long_limit_prices = pd.Series(np.nan).reindex_like(small_price_bars['FINAL'])
+    short_limit_prices = long_limit_prices.copy()
+
+    long_stop_loss_levels = long_limit_prices.copy()
+    short_stop_loss_levels = long_limit_prices.copy()
+
+    long_profit_target_levels = long_limit_prices.copy()
+    short_profit_target_levels = long_limit_prices.copy()
+
+    print("******* Checking for long setups formed in demand zones *******")
+    for dt_when_demand_zone_was_hit, zones_dts in when_price_hit_which_demand_zone.items():
+        for zone_dt, dt_when_price_exits_zone_first, dt_when_to_cancel_zone in zones_dts:
+            print(f'*** Demand zone formed at {zone_dt}, first exited at {dt_when_price_exits_zone_first} and canceled at {dt_when_to_cancel_zone}, was hit at ' + (
+                f'{dt_when_demand_zone_was_hit}. Checking for setups ***')
+            )
+            when_long_setup_happened = (
+                small_price_bars.loc[dt_when_demand_zone_was_hit:dt_when_to_cancel_zone, 'FINAL'].gt(
+                    long_fractal_prices.shift(1).ffill()[dt_when_demand_zone_was_hit:dt_when_to_cancel_zone]
+                )
+            )
+            dt_when_long_setup_happened = pd.NaT if not when_long_setup_happened.any() else when_long_setup_happened.idxmax()
+
+            if dt_when_long_setup_happened is not pd.NaT:
+                print(f'* Long setup happened at {dt_when_long_setup_happened}. Calculating limit, stop loss, and profit target prices *')
+                long_signals[dt_when_long_setup_happened] = True
+
+                idx_to_include_when_long_setup_happened = small_price_bars[dt_when_long_setup_happened:].index
+
+                lowest_bar_since_demand_zone_was_hit = small_price_bars.loc[
+                    dt_when_demand_zone_was_hit:idx_to_include_when_long_setup_happened[min(1, len(idx_to_include_when_long_setup_happened))], 'LOW'
+                ].idxmin()
+
+                limit_price = small_price_bars.loc[lowest_bar_since_demand_zone_was_hit, 'HIGH']
+                stop_loss_level = small_price_bars.loc[lowest_bar_since_demand_zone_was_hit, 'LOW']
+                profit_target_level = limit_price + rr * (limit_price - stop_loss_level)
+
+                long_limit_prices[dt_when_long_setup_happened] = limit_price
+                long_stop_loss_levels[dt_when_long_setup_happened] = stop_loss_level
+                long_profit_target_levels[dt_when_long_setup_happened] = profit_target_level
+
+    print("******* Checking for short setups formed in supply zones *******")
+    for dt_when_supply_zone_was_hit, zones_dts in when_price_hit_which_supply_zone.items():
+        for zone_dt, dt_when_price_exits_zone_first, dt_when_to_cancel_zone in zones_dts:
+            print(f'*** Supply zone formed at {zone_dt}, first exited at {dt_when_price_exits_zone_first} and canceled at {dt_when_to_cancel_zone}, was hit at ' + (
+                f'{dt_when_supply_zone_was_hit}. Checking for setups ***')
+            )
+            when_short_setup_happened = (
+                small_price_bars.loc[dt_when_supply_zone_was_hit:dt_when_to_cancel_zone, 'FINAL'].lt(
+                    short_fractal_prices.shift(1).ffill()[dt_when_supply_zone_was_hit:dt_when_to_cancel_zone]
+                )
+            )
+            dt_when_short_setup_happened = pd.NaT if not when_short_setup_happened.any() else when_short_setup_happened.idxmax()
+
+            if dt_when_short_setup_happened is not pd.NaT:
+                print(f'* Short setup happened at {dt_when_short_setup_happened}. Calculating limit, stop loss, and profit target prices *')
+                short_signals[dt_when_short_setup_happened] = True
+
+                idx_to_include_when_short_setup_happened = small_price_bars[dt_when_short_setup_happened:].index
+
+                highest_bar_since_supply_zone_was_hit = small_price_bars.loc[
+                    dt_when_supply_zone_was_hit:idx_to_include_when_short_setup_happened[min(1, len(idx_to_include_when_short_setup_happened))], 'HIGH'
+                ].idxmax()
+
+                limit_price = small_price_bars.loc[highest_bar_since_supply_zone_was_hit, 'LOW']
+                stop_loss_level = small_price_bars.loc[highest_bar_since_supply_zone_was_hit, 'HIGH']
+                profit_target_level = limit_price - rr * (stop_loss_level - limit_price)
+
+                short_limit_prices[dt_when_short_setup_happened] = limit_price
+                short_stop_loss_levels[dt_when_short_setup_happened] = stop_loss_level
+                short_profit_target_levels[dt_when_short_setup_happened] = profit_target_level
+
+    print("******* Done calculating signals *******")
+    signals = long_signals.astype(int) - short_signals.astype(int)
+
+    return_dict = dict(
+        signals=signals,
+        long_limit_prices=long_limit_prices,
+        short_limit_prices=short_limit_prices,
+        long_stop_loss_prices=long_stop_loss_levels,
+        short_stop_loss_prices=short_stop_loss_levels,
+        long_profit_taker=long_profit_target_levels,
+        short_profit_taker=short_profit_target_levels,
+    )
+
+    return return_dict
+
+
+"""
+def orion(minute_bars: pd.DataFrame, sessions: Session, big_timeframe='30T', small_timeframe='5T', setup_lookback=10, rr=2.0):
+    big_price_bars = minute_bars.resample(big_timeframe).agg(
+        {
+            'OPEN': 'first',
+            'HIGH': 'max',
+            'LOW': 'min',
+            'FINAL': 'last',
+            'VOLUME': 'sum',
+        }
+    )
+    big_price_bars = apply_sessions_to_aggregated_data(big_price_bars, sessions)
+
+    small_price_bars = minute_bars.resample(small_timeframe).agg(
+        {
+            'OPEN': 'first',
+            'HIGH': 'max',
+            'LOW': 'min',
+            'FINAL': 'last',
+            'VOLUME': 'sum',
+        }
+    )
+    small_price_bars = apply_sessions_to_aggregated_data(small_price_bars, sessions)
+
     may_we_look_for_long_setup = look_for_long_setup(big_price_bars, lookback=setup_lookback)
     may_we_look_for_short_setup = look_for_short_setup(big_price_bars, lookback=setup_lookback)
 
@@ -55,9 +229,6 @@ def orion(minute_bars: pd.DataFrame, sessions: Session, big_timeframe='30T', sma
         (short_zone['HIGH'].gt(small_price_bars['HIGH'])) & (small_price_bars['HIGH'].gt(short_zone['LOW']))
     )
 
-    """
-    eod.iloc[:-1] = datetime.apply(lambda x: x.date()).iloc[:-1].lt(datetime.shift(-1).iloc[:-1].apply(lambda x: x.date()))     # FIXME add sessions, this is incorrect since sessions start the day before
-    """
     datetime = small_price_bars.index.tz_convert(sessions.tzinfo).to_series()
     end_date_for_session = datetime.apply(
         lambda x: x.date() if x.time() < sessions.end_time or (
@@ -72,8 +243,8 @@ def orion(minute_bars: pd.DataFrame, sessions: Session, big_timeframe='30T', sma
     eod = datetime.asof(session_end_times.loc[datetime]).drop_duplicates()
     eod = pd.Series([x in eod.values for x in datetime.values], index=datetime.index)
 
-    stop_looking_for_long_setup = (small_price_bars['FINAL'] < long_zone['LOW']) | eod
-    stop_looking_for_short_setup = (small_price_bars['FINAL'] > short_zone['HIGH']) | eod
+    stop_looking_for_long_setup = (small_price_bars['FINAL'] < long_zone['LOW']) #| eod
+    stop_looking_for_short_setup = (small_price_bars['FINAL'] > short_zone['HIGH']) #| eod
 
     fractals = rachel_t_fractals(small_price_bars)
     long_fractals = fractals < 0
@@ -84,7 +255,7 @@ def orion(minute_bars: pd.DataFrame, sessions: Session, big_timeframe='30T', sma
     long_setup = small_price_bars['FINAL'] > long_fractal_prices
     short_setup = small_price_bars['FINAL'] < short_fractal_prices
 
-    long_setup_groups = small_price_bars.loc[small_price_bar_in_long_zone, 'LOW'].reindex_like(small_price_bars['LOW'], method='ffill')
+    long_setup_groups = small_price_bars.loc[small_price_bar_in_long_zone, 'LOW'].reindex_like(small_price_bars['LOW'], method='ffill') ##FIXME
     short_setup_groups = small_price_bars.loc[small_price_bar_in_short_zone, 'HIGH'].reindex_like(small_price_bars['HIGH'], method='ffill')
 
     lowest_low_since_began_looking_for_setup = small_price_bars.loc[
@@ -97,16 +268,14 @@ def orion(minute_bars: pd.DataFrame, sessions: Session, big_timeframe='30T', sma
     looking_for_long_setup = may_we_look_for_long_setup.reindex_like(small_price_bars['FINAL']).mask(
         stop_looking_for_long_setup, False
     ).ffill()
-    looking_for_long_setup = looking_for_long_setup & small_price_bar_in_long_zone
-    looking_for_long_setup.loc[~looking_for_long_setup] = np.nan
-    looking_for_long_setup = looking_for_long_setup.mask(stop_looking_for_long_setup, False).ffill()
+    looking_for_long_setup.loc[~stop_looking_for_long_setup & ~small_price_bar_in_long_zone] = pd.NA
+    looking_for_long_setup.ffill(inplace=True)
 
     looking_for_short_setup = may_we_look_for_short_setup.reindex_like(small_price_bars['FINAL']).mask(
         stop_looking_for_short_setup, False
     ).ffill()
-    looking_for_short_setup = looking_for_short_setup & small_price_bar_in_short_zone
-    looking_for_short_setup.loc[~looking_for_short_setup] = np.nan
-    looking_for_short_setup = looking_for_short_setup.mask(stop_looking_for_short_setup, False).ffill()
+    looking_for_short_setup.loc[~stop_looking_for_short_setup & ~small_price_bar_in_short_zone] = pd.NA
+    looking_for_short_setup.ffill(inplace=True)
 
     long_signals = looking_for_long_setup & long_setup
     short_signals = looking_for_short_setup & short_setup
@@ -117,7 +286,7 @@ def orion(minute_bars: pd.DataFrame, sessions: Session, big_timeframe='30T', sma
         small_price_bars['HIGH'], method='ffill'
     ).where(signals > 0, np.nan)
     short_limit_prices = small_price_bars.loc[highest_high_since_began_looking_for_setup.index, 'LOW'].reindex_like(
-        small_price_bars['HIGH'], method='ffill'
+        small_price_bars['LOW'], method='ffill'
     ).where(signals < 0, np.nan)
 
     long_stop_loss_prices = lowest_low_since_began_looking_for_setup.reindex_like(
@@ -143,7 +312,7 @@ def orion(minute_bars: pd.DataFrame, sessions: Session, big_timeframe='30T', sma
     )
 
     return return_dict
-
+"""
 
 def rachel_t_fractals(price_bars: pd.DataFrame):
     def is_regular_fractal(bars: pd.DataFrame) -> pd.Series:
@@ -400,16 +569,37 @@ def look_for_short_setup(large_price_bars: pd.DataFrame, lookback: int) -> pd.Se
 if __name__ == "__main__":
     from syscore.fileutils import get_resolved_pathname
     import mplfinance as mpf
+    from sysdata.sim.db_futures_sim_data import dbFuturesSimData
 
-    big_price_bars = pd.read_csv(get_resolved_pathname('data') + '/COMEX_GC1!, 30.csv', index_col=[0], parse_dates=True)[
-            ['open', 'high', 'low', 'close']].rename(columns=dict(open="OPEN", high='HIGH', low='LOW', close='CLOSE'))
-    big_price_bars = big_price_bars.reindex(big_price_bars.index.astype(pd.DatetimeTZDtype(tz='EST')))
-    small_price_bars = pd.read_csv(get_resolved_pathname('data') + '/COMEX_GC1!, 5.csv', index_col=[0], parse_dates=True)[
-            ['open', 'high', 'low', 'close']].rename(columns=dict(open="OPEN", high='HIGH', low='LOW', close='CLOSE'))
-    small_price_bars = small_price_bars.reindex(small_price_bars.index.astype(pd.DatetimeTZDtype(tz='EST')))
+    data = dbFuturesSimData()
+    minute_bars = data.get_backadjusted_futures_price('CL')
+    sessions = data.get_sessions_for_instrument('CL')
 
-    orion_trades = orion(big_price_bars, small_price_bars)
+    orion_trades = orion(minute_bars, sessions=sessions, small_timeframe='5T', big_timeframe='30T', rr=2.5)
+
     signals = orion_trades['signals']
+
+    big_price_bars = minute_bars.resample('30T').agg(
+        {
+            'OPEN': 'first',
+            'HIGH': 'max',
+            'LOW': 'min',
+            'FINAL': 'last',
+            'VOLUME': 'sum',
+        }
+    )
+    big_price_bars = apply_sessions_to_aggregated_data(big_price_bars, sessions)
+
+    small_price_bars = minute_bars.resample('5T').agg(
+        {
+            'OPEN': 'first',
+            'HIGH': 'max',
+            'LOW': 'min',
+            'FINAL': 'last',
+            'VOLUME': 'sum',
+        }
+    )
+    small_price_bars = apply_sessions_to_aggregated_data(small_price_bars, sessions)
 
     apds = [
         mpf.make_addplot(small_price_bars['LOW'].where(signals > 0, np.nan), type='scatter', marker='^'),
