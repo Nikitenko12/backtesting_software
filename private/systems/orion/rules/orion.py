@@ -45,12 +45,12 @@ def orion(minute_bars: pd.DataFrame, sessions: Session, big_timeframe='30T', sma
     demand_zones = big_price_bars.shift(1).loc[may_we_look_for_long_setup.shift(1).fillna(False), ['HIGH', 'LOW']]
     supply_zones = big_price_bars.shift(1).loc[may_we_look_for_short_setup.shift(1).fillna(False), ['HIGH', 'LOW']]
 
-    when_price_hit_which_demand_zone = pd.Series([[]] * len(small_price_bars.index), index=small_price_bars.index)
+    when_price_hit_which_demand_zone = pd.Series([list() for _ in small_price_bars.index], index=small_price_bars.index)
     when_price_hit_which_supply_zone = when_price_hit_which_demand_zone.copy()
 
     print("******* Checking when prices entered demand zones *******")
     for zone_dt, zone in demand_zones.iterrows():
-        when_price_exits_zone_first = big_price_bars.loc[zone_dt:, 'OPEN'].gt(zone.HIGH)
+        when_price_exits_zone_first = big_price_bars.loc[zone_dt:, 'FINAL'].gt(zone.HIGH).shift(1).fillna(False)
         dt_when_price_exits_zone_first = pd.NaT if not when_price_exits_zone_first.any() else when_price_exits_zone_first.idxmax()
 
         if dt_when_price_exits_zone_first is not pd.NaT:
@@ -70,7 +70,7 @@ def orion(minute_bars: pd.DataFrame, sessions: Session, big_timeframe='30T', sma
 
     print("******* Checking when prices entered supply zones *******")
     for zone_dt, zone in supply_zones.iterrows():
-        when_price_exits_zone_first = big_price_bars.loc[zone_dt:, 'OPEN'].lt(zone.LOW)
+        when_price_exits_zone_first = big_price_bars.loc[zone_dt:, 'FINAL'].lt(zone.LOW).shift(1).fillna(False)
         dt_when_price_exits_zone_first = pd.NaT if not when_price_exits_zone_first.any() else when_price_exits_zone_first.idxmax()
 
         if dt_when_price_exits_zone_first is not pd.NaT:
@@ -98,10 +98,10 @@ def orion(minute_bars: pd.DataFrame, sessions: Session, big_timeframe='30T', sma
     long_fractal_prices = small_price_bars.loc[long_fractals, 'HIGH'].reindex_like(small_price_bars['HIGH'])
     short_fractal_prices = small_price_bars.loc[short_fractals, 'LOW'].reindex_like(small_price_bars['LOW'])
 
-    long_signals = pd.Series(False).reindex_like(small_price_bars['FINAL'])
+    long_signals = pd.Series(False, index=small_price_bars.index)
     short_signals = long_signals.copy()
 
-    long_limit_prices = pd.Series(np.nan).reindex_like(small_price_bars['FINAL'])
+    long_limit_prices = pd.Series(np.nan, index=small_price_bars.index)
     short_limit_prices = long_limit_prices.copy()
 
     long_stop_loss_levels = long_limit_prices.copy()
@@ -173,10 +173,11 @@ def orion(minute_bars: pd.DataFrame, sessions: Session, big_timeframe='30T', sma
                 short_profit_target_levels[dt_when_short_setup_happened] = profit_target_level
 
     print("******* Done calculating signals *******")
-    signals = long_signals.astype(int) - short_signals.astype(int)
+    # signals = long_signals.astype(int) - short_signals.astype(int)
 
     return_dict = dict(
-        signals=signals,
+        long_signals=long_signals,
+        short_signals=short_signals,
         long_limit_prices=long_limit_prices,
         short_limit_prices=short_limit_prices,
         long_stop_loss_prices=long_stop_loss_levels,
@@ -573,11 +574,13 @@ if __name__ == "__main__":
 
     data = dbFuturesSimData()
     minute_bars = data.get_backadjusted_futures_price('CL')
+    minute_bars = minute_bars.loc[minute_bars['FINAL'] != 0.0]
     sessions = data.get_sessions_for_instrument('CL')
 
     orion_trades = orion(minute_bars, sessions=sessions, small_timeframe='5T', big_timeframe='30T', rr=2.5)
 
-    signals = orion_trades['signals']
+    long_signals = orion_trades['long_signals']
+    short_signals = orion_trades['short_signals']
 
     big_price_bars = minute_bars.resample('30T').agg(
         {
@@ -602,16 +605,18 @@ if __name__ == "__main__":
     small_price_bars = apply_sessions_to_aggregated_data(small_price_bars, sessions)
 
     apds = [
-        mpf.make_addplot(small_price_bars['LOW'].where(signals > 0, np.nan), type='scatter', marker='^'),
-        mpf.make_addplot(small_price_bars['HIGH'].where(signals < 0, np.nan), type='scatter', marker='v'),
+        mpf.make_addplot(small_price_bars['LOW'].where(long_signals, np.nan), type='scatter', marker='^'),
+        mpf.make_addplot(small_price_bars['HIGH'].where(short_signals, np.nan), type='scatter', marker='v'),
         mpf.make_addplot(orion_trades['long_stop_loss_prices'], type='line'),
         mpf.make_addplot(orion_trades['long_profit_taker'], type='line'),
         mpf.make_addplot(orion_trades['short_stop_loss_prices'], type='line'),
         mpf.make_addplot(orion_trades['short_profit_taker'], type='line'),
     ]
     mpf.plot(
-        small_price_bars.rename(columns=dict(OPEN="Open", HIGH="High", LOW="Low", CLOSE="Close")),
+        small_price_bars.rename(columns=dict(OPEN="Open", HIGH="High", LOW="Low", FINAL="Close")),
         type='candle',
         show_nontrading=False,
         addplot=apds,
     )
+
+    orion_trades_df = pd.DataFrame(orion_trades)
