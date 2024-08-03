@@ -10,8 +10,9 @@ trading_rules:
          - "rawdata.get_minute_prices"
          - "rawdata.get_sessions"
      other_args:
-         big_timeframe: '30T'
-         small_timeframe: '5T'
+         big_timeframe: '30 min'
+         small_timeframe: '5 min'
+         setup_lookback: 50
          rr: 2.5
 
 instrument_weights:

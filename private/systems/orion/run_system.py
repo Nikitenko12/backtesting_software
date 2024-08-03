@@ -62,7 +62,8 @@ if __name__ == "__main__":
     )
 
     orion_trades = forecast_dict.copy()
-    signals = orion_trades['signals']
+    long_signals = orion_trades['long_signals']
+    short_signals = orion_trades['short_signals']
 
     # apds = [
     #     mpf.make_addplot(small_price_bars['LOW'].where(signals > 0, np.nan), type='scatter', marker='^'),
@@ -125,7 +126,7 @@ if __name__ == "__main__":
     from syscore.fileutils import resolve_path_and_filename_for_package
 
     path_dep_df_summary = path_dep_df[
-        ['signals', 'dt_when_limit_price_was_hit', 'dt_when_zone_changed', 'dt_when_stop_loss_was_hit', 'dt_when_profit_target_was_hit', 'dt_when_this_session_ended', 'dt_when_trade_exited']
+        ['signals', 'dt_when_limit_price_was_hit', 'dt_when_stop_loss_was_hit', 'dt_when_profit_target_was_hit', 'dt_when_this_session_ended', 'dt_when_trade_exited']
     ].tz_convert('EST')
 
     path_dep_df_summary['dt_when_limit_price_was_hit'] = [x.tz_convert('EST') for x in path_dep_df_summary['dt_when_limit_price_was_hit']]

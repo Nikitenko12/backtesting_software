@@ -134,6 +134,7 @@ def apply_limit_prices_slpt_to_signals(
     )
 
     for dt, signal in it:
+        print(f'******* Signal {signal} generated at {dt} *******')
         datetime_starting_from_next_bar = price_index_series.mask(
             price_index_series <= dt, np.nan
         ).dropna()
@@ -159,6 +160,7 @@ def apply_limit_prices_slpt_to_signals(
             profit_target_level = short_profit_target_levels[dt]
 
         if dt_when_limit_price_was_hit is not pd.NaT:
+            print(f'*** Limit price was hit at {dt_when_limit_price_was_hit}. Calculating exit times ***')
             datetime_starting_from_bar_when_limit_price_was_hit = price_index_series.mask(
                 price_index_series < dt_when_limit_price_was_hit, np.nan
             ).dropna()
@@ -206,23 +208,39 @@ def apply_limit_prices_slpt_to_signals(
         path_dep_df.loc[dt, 'dt_for_first_bar_in_next_session'] = dt_for_first_bar_in_next_session
         path_dep_df.loc[dt, 'dt_when_trade_exited'] = dt_when_trade_exited
 
+    print(f'****** Done calculating entry times for signals *******')
     trades_which_hit_limit_prices = path_dep_df.dt_when_limit_price_was_hit.dropna(inplace=False).index
     path_dep_df_after_limit_prices = path_dep_df.loc[trades_which_hit_limit_prices]
 
+    previous_dt = path_dep_df_after_limit_prices.index[0]
     previous_row = path_dep_df_after_limit_prices.iloc[0]
     it = iter(path_dep_df_after_limit_prices.iloc[1:].iterrows())
     for dt, row in it:
-        if dt <= previous_row.dt_when_trade_exited:
+        print(f'******* Checking signal {row.signals} generated at {dt} and hit at {row.dt_when_limit_price_was_hit} *******')
+        if row.signals != previous_row.signals and dt <= previous_row.dt_when_limit_price_was_hit:
+            print(f'*** Price hit opposing zone and generated opposite signal at {dt} before filling previous order at {previous_row.dt_when_limit_price_was_hit}. ' + (
+                f'Cancelling previous order ***')
+            )
+            path_dep_df_after_limit_prices.drop(index=previous_dt, inplace=True)
+            previous_dt = dt
+            previous_row = row.copy()
+        elif dt <= previous_row.dt_when_trade_exited:
+            print(f'*** Signal generated at {dt} before previous order exited at {previous_row.dt_when_trade_exited}. Dropping signal ***')
             path_dep_df_after_limit_prices.drop(index=dt, inplace=True)
         else:
+            print(f'*** Everything seems fine over here. Keeping signal ***')
+            previous_dt = dt
             previous_row = row.copy()
 
+    print(f'******* Done checking signals. There were {len(path_dep_df_after_limit_prices.index)} trades ' + (
+        f'from {price_index_series.iloc[0]} to {price_index_series.iloc[-1]} *******')
+    )
     next_session_if_exited_trade_at_eod = path_dep_df_after_limit_prices.loc[
         path_dep_df_after_limit_prices.dt_when_trade_exited == path_dep_df_after_limit_prices.dt_when_this_session_ended,
         'dt_for_first_bar_in_next_session'
     ].dropna()
 
-    forecasts = pd.Series(0, index=prices.index)
+    forecasts = pd.Series(np.nan, index=prices.index)
     forecasts[path_dep_df_after_limit_prices.dt_when_limit_price_was_hit] = signals[path_dep_df_after_limit_prices.index]
     forecasts[price_index_series.asof(path_dep_df_after_limit_prices.dt_when_trade_exited)] = 0
     forecasts[next_session_if_exited_trade_at_eod] = 0
@@ -911,4 +929,4 @@ if __name__ == "__main__":
 
     orion_trades_df = pd.DataFrame(orion_trades)
     # orion_trades_which_hit_limit_prices_df = pd.DataFrame(orion_trades_which_hit_limit_prices)
-    new_orion_trades_df = pd.DataFrame(new_orion_trades)
+    new_orion_trades_df = pd.DataFrame({k: v for k, v in new_orion_trades.items() if k != 'path_dep_df'})
