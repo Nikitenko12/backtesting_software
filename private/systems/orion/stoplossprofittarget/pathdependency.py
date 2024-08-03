@@ -920,6 +920,37 @@ if __name__ == "__main__":
             )
         ),
     ]
+    for dt, demand_zone in orion_trades['demand_zones'].iterrows():
+        demand_zone = pd.DataFrame(demand_zone).T.reindex_like(small_price_bars[['HIGH', 'LOW']]).ffill()
+
+        new_apds.append(
+            mpf.make_addplot(
+                demand_zone, type='line', color='orange',
+                fill_between=dict(
+                    y1=demand_zone.LOW.values,
+                    y2=demand_zone.HIGH.values,
+                    where=~(demand_zone.HIGH.isna()).values,
+                    alpha=0.5,
+                    color='orange'
+                )
+            )
+        )
+
+    for dt, supply_zone in orion_trades['supply_zones'].iterrows():
+        supply_zone = pd.DataFrame(supply_zone).T.reindex_like(small_price_bars[['HIGH', 'LOW']]).ffill()
+
+        new_apds.append(
+            mpf.make_addplot(
+                supply_zone.HIGH, type='line', color='orange',
+                fill_between=dict(
+                    y1=supply_zone.HIGH.values,
+                    y2=supply_zone.LOW.values,
+                    where=~(supply_zone.HIGH.isna()).values,
+                    alpha=0.5,
+                    color='orange'
+                )
+            )
+        )
     mpf.plot(
         small_price_bars[['OPEN', 'HIGH', 'LOW', 'FINAL']].rename(columns=dict(OPEN="Open", HIGH="High", LOW="Low", FINAL="Close")),
         type='candle',

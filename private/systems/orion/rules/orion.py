@@ -198,6 +198,8 @@ def orion(minute_bars: pd.DataFrame, sessions: Session, big_timeframe='30T', sma
         short_stop_loss_prices=short_stop_loss_levels,
         long_profit_taker=long_profit_target_levels,
         short_profit_taker=short_profit_target_levels,
+        demand_zones=demand_zones,
+        supply_zones=supply_zones,
     )
 
     return return_dict
