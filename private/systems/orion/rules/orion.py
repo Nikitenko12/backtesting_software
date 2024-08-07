@@ -783,14 +783,13 @@ def get_zones(bars: pd.DataFrame, length: int = 50):
     low = bars.LOW
     close = bars.FINAL
 
-    def atr(length: int = 14):
-        true_range = pd.concat([(high - low), (high - close.shift(1)).abs()], axis=1).max(axis=1)
-        true_range = pd.concat([true_range, (low - close.shift(1)).abs()], axis=1).max(axis=1)
+    def atr(len: int = 200):
+        true_range = pd.concat([(high - low), (low - close.shift(1)).abs(), (high - close.shift(1)).abs()], axis=1).max(axis=1)
         true_range.iloc[0] = high.iloc[0] - low.iloc[0]
 
-        return true_range.rolling(length).mean()
+        return true_range.ewm(alpha=1./float(len)).mean()
 
-    ATR = atr()
+    ATR = atr(200)
 
     def swings(len: int):
         upper = high.rolling(len).max()
@@ -828,7 +827,7 @@ def get_zones(bars: pd.DataFrame, length: int = 50):
                     max = high.iloc[n-i] if min == low.iloc[n-i] else max
                     idx = i if min == low.iloc[n-i] else idx
 
-        return dict(HIGH=max, LOW=min, idx=price_index_series.iloc[idx])
+        return dict(HIGH=max, LOW=min, idx=price_index_series.iloc[n-idx])
 
     def crossover(series1, series2):
         return series1.gt(series2) & series1.shift(1).le(series2.shift(1))
@@ -853,12 +852,18 @@ def get_zones(bars: pd.DataFrame, length: int = 50):
     ibtm_x = price_index_series.shift(5)
     ibtm_cross = True
 
-    when_to_show_bullish_obs = crossover(close, itop_y) # & itop_cross & top_y.ne(itop_y)
+    latest_top_y = top_y.replace(0, np.nan).ffill().fillna(0)
+    latest_itop_y = itop_y.replace(0, np.nan).ffill().fillna(0)
+
+    latest_btm_y = btm_y.replace(0, np.nan).ffill().fillna(0)
+    latest_ibtm_y = ibtm_y.replace(0, np.nan).ffill().fillna(0)
+
+    when_to_show_bullish_obs = crossover(close, latest_itop_y) & latest_top_y.ne(latest_itop_y)
     dts_when_to_show_bullish_obs = when_to_show_bullish_obs.loc[when_to_show_bullish_obs].index
     for dt in dts_when_to_show_bullish_obs:
         demand_zones.loc[dt] = ob_coord(False, 5, bars.index.get_indexer([dt])[0])
 
-    when_to_show_bearish_obs = crossunder(close, ibtm_y) # & ibtm_cross & btm_y.ne(ibtm_y)
+    when_to_show_bearish_obs = crossunder(close, latest_ibtm_y) & latest_btm_y.ne(latest_ibtm_y)
     dts_when_to_show_bearish_obs = when_to_show_bearish_obs.loc[when_to_show_bearish_obs].index
     for dt in dts_when_to_show_bearish_obs:
         supply_zones.loc[dt] = ob_coord(True, 5, bars.index.get_indexer([dt])[0])
@@ -872,16 +877,25 @@ if __name__ == "__main__":
     from sysdata.sim.db_futures_sim_data import dbFuturesSimData
 
     data = dbFuturesSimData()
-    minute_bars = data.get_backadjusted_futures_price('CL')
-    minute_bars = minute_bars.loc[minute_bars['FINAL'] != 0.0]
+    # minute_bars = data.get_backadjusted_futures_price('CL')
+    # minute_bars = minute_bars.loc[minute_bars['FINAL'] != 0.0]
+    price_bars = pd.read_csv(get_resolved_pathname('data.NYMEX_DL_CL1!, 1') + '.csv', index_col=[0], parse_dates=True)[
+        ['open', 'high', 'low', 'close']].rename(
+        columns=dict(open='OPEN', high='HIGH', low='LOW', close='FINAL')
+    )
+    price_bars['VOLUME'] = 0
+    price_bars = price_bars.loc[
+                 price_bars.index.to_series().asof('2024-05-30 17:00:00-05:00'):price_bars.index.to_series().asof(
+                     '2024-06-30 16:00:00-05:00')]
+
     sessions = data.get_sessions_for_instrument('CL')
 
-    orion_trades = orion(minute_bars, sessions=sessions, small_timeframe='5T', big_timeframe='30T', rr=2.5)
+    orion_trades = orion(price_bars, sessions=sessions, small_timeframe='5T', big_timeframe='30T', rr=2.5)
 
     long_signals = orion_trades['long_signals']
     short_signals = orion_trades['short_signals']
 
-    big_price_bars = minute_bars.resample('30T').agg(
+    big_price_bars = price_bars.resample('30T').agg(
         {
             'OPEN': 'first',
             'HIGH': 'max',
@@ -892,7 +906,7 @@ if __name__ == "__main__":
     )
     big_price_bars = apply_sessions_to_aggregated_data(big_price_bars, sessions)
 
-    small_price_bars = minute_bars.resample('5T').agg(
+    small_price_bars = price_bars.resample('5T').agg(
         {
             'OPEN': 'first',
             'HIGH': 'max',
@@ -915,16 +929,16 @@ if __name__ == "__main__":
     swing_lows = swing_lows.reindex_like(small_price_bars['FINAL'])
 
     apds = [
-        # mpf.make_addplot(small_price_bars['LOW'].where(long_signals, np.nan), type='scatter', marker='^'),
-        # mpf.make_addplot(small_price_bars['HIGH'].where(short_signals, np.nan), type='scatter', marker='v'),
+        mpf.make_addplot(small_price_bars['LOW'].where(long_signals, np.nan), type='scatter', marker='^'),
+        mpf.make_addplot(small_price_bars['HIGH'].where(short_signals, np.nan), type='scatter', marker='v'),
         mpf.make_addplot(swing_highs, type='scatter', color='purple', marker='x'),
         mpf.make_addplot(swing_lows, type='scatter', color='yellow', marker='x'),
-        # mpf.make_addplot(orion_trades['red_fractals_prices'], type='scatter', color='red', marker='v'),
-        # mpf.make_addplot(orion_trades['green_fractals_prices'], type='scatter', color='green', marker='^'),
-        # mpf.make_addplot(orion_trades['long_stop_loss_prices'], type='line'),
-        # mpf.make_addplot(orion_trades['long_profit_taker'], type='line'),
-        # mpf.make_addplot(orion_trades['short_stop_loss_prices'], type='line'),
-        # mpf.make_addplot(orion_trades['short_profit_taker'], type='line'),
+        mpf.make_addplot(orion_trades['red_fractals_prices'], type='scatter', color='red', marker='v'),
+        mpf.make_addplot(orion_trades['green_fractals_prices'], type='scatter', color='green', marker='^'),
+        mpf.make_addplot(orion_trades['long_stop_loss_prices'], type='line'),
+        mpf.make_addplot(orion_trades['long_profit_taker'], type='line'),
+        mpf.make_addplot(orion_trades['short_stop_loss_prices'], type='line'),
+        mpf.make_addplot(orion_trades['short_profit_taker'], type='line'),
     ]
 
     demand_zones_dts = pd.Series([x[i] for x in when_price_hit_which_demand_zone.values for i in range(len(x))]).drop_duplicates()
@@ -983,4 +997,68 @@ if __name__ == "__main__":
         addplot=apds,
     )
 
-    orion_trades_df = pd.DataFrame(orion_trades)
+    ###################################################################################################################
+
+    big_apds = [
+        mpf.make_addplot(swing_highs.reindex_like(big_price_bars['FINAL']), type='scatter', color='purple', marker='x'),
+        mpf.make_addplot(swing_lows.reindex_like(big_price_bars['FINAL']), type='scatter', color='yellow', marker='x'),
+    ]
+
+    for dt, demand_zone in orion_trades['demand_zones'].iterrows():
+
+        dt_when_to_cancel_zone = big_price_bars.loc[dt:, 'FINAL'].lt(demand_zone.LOW)
+        dt_when_to_cancel_zone = big_price_bars.index[
+            -1] if not dt_when_to_cancel_zone.any() else dt_when_to_cancel_zone.idxmax()
+
+        demand_zone = pd.DataFrame(dict(zip(demand_zone.index, demand_zone.values)),
+                                   index=big_price_bars.loc[
+                                         demand_zone.idx:dt_when_to_cancel_zone].index).reindex_like(
+            big_price_bars[['HIGH', 'LOW']]
+        )
+
+        if len(demand_zone) > 0:
+            big_apds.append(
+                mpf.make_addplot(
+                    demand_zone.LOW, type='line', color='blue',
+                    fill_between=dict(
+                        y1=demand_zone.LOW.values,
+                        y2=demand_zone.HIGH.values,
+                        where=~(demand_zone.HIGH.isna()).values,
+                        alpha=0.5,
+                        color='blue'
+                    )
+                )
+            )
+
+    for dt, supply_zone in orion_trades['supply_zones'].iterrows():
+        dt_when_to_cancel_zone = big_price_bars.loc[dt:, 'FINAL'].gt(supply_zone.HIGH)
+        dt_when_to_cancel_zone = big_price_bars.index[
+            -1] if not dt_when_to_cancel_zone.any() else dt_when_to_cancel_zone.idxmax()
+
+        supply_zone = pd.DataFrame(dict(zip(supply_zone.index, supply_zone.values)),
+                                   index=big_price_bars.loc[
+                                         supply_zone.idx:dt_when_to_cancel_zone].index).reindex_like(
+            big_price_bars[['HIGH', 'LOW']]
+        )
+
+        if len(supply_zone) > 0:
+            big_apds.append(
+                mpf.make_addplot(
+                    supply_zone.HIGH, type='line', color='orange',
+                    fill_between=dict(
+                        y1=supply_zone.HIGH.values,
+                        y2=supply_zone.LOW.values,
+                        where=~(supply_zone.HIGH.isna()).values,
+                        alpha=0.5,
+                        color='orange'
+                    )
+                )
+            )
+
+    mpf.plot(
+        big_price_bars[['OPEN', 'HIGH', 'LOW', 'FINAL']].rename(
+            columns=dict(OPEN="Open", HIGH="High", LOW="Low", FINAL="Close")),
+        type='candle',
+        show_nontrading=False,
+        addplot=big_apds,
+    )
