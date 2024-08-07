@@ -39,25 +39,23 @@ def orion(minute_bars: pd.DataFrame, sessions: Session, big_timeframe='30T', sma
     small_price_bars = apply_sessions_to_aggregated_data(small_price_bars, sessions)
 
     print("******* Calculating supply and demand zones *******")
-    # may_we_look_for_long_setup = look_for_long_setup(big_price_bars, lookback=setup_lookback)
-    # may_we_look_for_short_setup = look_for_short_setup(big_price_bars, lookback=setup_lookback)
+
+    # swings = swing_highs_lows(big_price_bars, swing_length=5)
+    # order_blocks = ob(big_price_bars, swing_highs_lows=swings, close_mitigation=False).shift(1).dropna() # shift(1) because bar dt is bar open dt
     #
-    # demand_zones = big_price_bars.shift(1).loc[may_we_look_for_long_setup.shift(1).fillna(False), ['HIGH', 'LOW']]
-    # supply_zones = big_price_bars.shift(1).loc[may_we_look_for_short_setup.shift(1).fillna(False), ['HIGH', 'LOW']]
-    swings = swing_highs_lows(big_price_bars, swing_length=10)
-    order_blocks = ob(big_price_bars, swing_highs_lows=swings, close_mitigation=False).dropna()
+    # demand_zones_idx = order_blocks.loc[order_blocks.OB > 0].index
+    # supply_zones_idx = order_blocks.loc[order_blocks.OB < 0].index
+    #
+    # demand_zones = pd.DataFrame(
+    #     dict(HIGH=order_blocks.Top[demand_zones_idx].values, LOW=order_blocks.Bottom[demand_zones_idx].values),
+    #     index=big_price_bars.index[order_blocks.loc[demand_zones_idx, 'CloseIndex'].astype(int)]
+    # )
+    # supply_zones = pd.DataFrame(
+    #     dict(HIGH=order_blocks.Top[supply_zones_idx].values, LOW=order_blocks.Bottom[supply_zones_idx].values),
+    #     index=big_price_bars.index[order_blocks.loc[supply_zones_idx, 'CloseIndex'].astype(int)]
+    # )
 
-    demand_zones_idx = order_blocks.loc[order_blocks.OB > 0].index
-    supply_zones_idx = order_blocks.loc[order_blocks.OB < 0].index
-
-    demand_zones = pd.DataFrame(
-        dict(HIGH=order_blocks.Top[demand_zones_idx].values, LOW=order_blocks.Bottom[demand_zones_idx].values),
-        index=big_price_bars.index[order_blocks.loc[demand_zones_idx, 'CloseIndex'].astype(int)]
-    )
-    supply_zones = pd.DataFrame(
-        dict(HIGH=order_blocks.Top[supply_zones_idx].values, LOW=order_blocks.Bottom[supply_zones_idx].values),
-        index=big_price_bars.index[order_blocks.loc[supply_zones_idx, 'CloseIndex'].astype(int)]
-    )
+    demand_zones, supply_zones, swing_highs, swing_lows = get_zones(big_price_bars)
 
     when_price_hit_which_demand_zone = pd.Series([list() for _ in small_price_bars.index], index=small_price_bars.index)
     when_price_hit_which_supply_zone = pd.Series([list() for _ in small_price_bars.index], index=small_price_bars.index)
@@ -66,10 +64,6 @@ def orion(minute_bars: pd.DataFrame, sessions: Session, big_timeframe='30T', sma
     for zone_dt, zone in demand_zones.iterrows():
         print(f'Zone from {zone_dt}')
         # input("Continue? ")
-        # when_price_exits_zone_first = big_price_bars.loc[zone_dt:, 'FINAL'].gt(zone.HIGH).shift(1).fillna(False)
-        # dt_when_price_exits_zone_first = pd.NaT if not when_price_exits_zone_first.any() else when_price_exits_zone_first.idxmax()
-
-        # if dt_when_price_exits_zone_first is not pd.NaT:
         dt_when_to_cancel_zone = small_price_bars.loc[zone_dt:, 'FINAL'].lt(zone.LOW)
         dt_when_to_cancel_zone = small_price_bars.index[-1] if not dt_when_to_cancel_zone.any() else dt_when_to_cancel_zone.idxmax()
 
@@ -86,10 +80,6 @@ def orion(minute_bars: pd.DataFrame, sessions: Session, big_timeframe='30T', sma
 
     print("******* Checking when prices entered supply zones *******")
     for zone_dt, zone in supply_zones.iterrows():
-        # when_price_exits_zone_first = big_price_bars.loc[zone_dt:, 'FINAL'].lt(zone.LOW).shift(1).fillna(False)
-        # dt_when_price_exits_zone_first = pd.NaT if not when_price_exits_zone_first.any() else when_price_exits_zone_first.idxmax()
-        #
-        # if dt_when_price_exits_zone_first is not pd.NaT:
         dt_when_to_cancel_zone = small_price_bars.loc[zone_dt:, 'FINAL'].gt(zone.HIGH)
         dt_when_to_cancel_zone = small_price_bars.index[-1] if not dt_when_to_cancel_zone.any() else dt_when_to_cancel_zone.idxmax()
 
@@ -108,11 +98,7 @@ def orion(minute_bars: pd.DataFrame, sessions: Session, big_timeframe='30T', sma
     when_price_hit_which_supply_zone = when_price_hit_which_supply_zone.loc[[len(x) > 0 for x in when_price_hit_which_supply_zone]]
 
     print("******* Calculating fractals *******")
-    fractals = rachel_t_fractals(small_price_bars)
-    red_fractals = fractals < 0
-    green_fractals = fractals > 0
-    red_fractal_prices = small_price_bars.loc[red_fractals, 'HIGH'].reindex_like(small_price_bars['HIGH'])
-    green_fractal_prices = small_price_bars.loc[green_fractals, 'LOW'].reindex_like(small_price_bars['LOW'])
+    red_fractals, red_fractals_prices, green_fractals, green_fractals_prices = rachel_t_fractals(small_price_bars)
 
     long_signals = pd.Series(False, index=small_price_bars.index)
     short_signals = pd.Series(False, index=small_price_bars.index)
@@ -136,45 +122,46 @@ def orion(minute_bars: pd.DataFrame, sessions: Session, big_timeframe='30T', sma
                 f'{dt_when_demand_zone_was_hit}. Checking for setups ***')
             )
             # input('Continue? ')
-            dt_when_to_start_to_look_for_setups = small_price_bars.loc[dt_when_demand_zone_was_hit:].index[1]
-            if dt_when_to_start_to_look_for_setups < dt_when_to_cancel_zone:
-                when_long_setup_happened = (
-                    small_price_bars.loc[dt_when_to_start_to_look_for_setups:dt_when_to_cancel_zone, 'FINAL'].gt(
-                        red_fractal_prices.shift(1).ffill()[dt_when_to_start_to_look_for_setups:dt_when_to_cancel_zone]
+            if dt_when_demand_zone_was_hit < small_price_bars.index[-1]:
+                dt_when_to_start_to_look_for_setups = small_price_bars.loc[dt_when_demand_zone_was_hit:].index[1]
+                if dt_when_to_start_to_look_for_setups < dt_when_to_cancel_zone:
+                    when_long_setup_happened = (
+                        small_price_bars.loc[dt_when_to_start_to_look_for_setups:dt_when_to_cancel_zone, 'FINAL'].gt(
+                            red_fractals_prices.ffill()[dt_when_to_start_to_look_for_setups:dt_when_to_cancel_zone]
+                        )
                     )
-                )
-                dt_when_long_setup_happened = pd.NaT if not when_long_setup_happened.any() else when_long_setup_happened.idxmax()
+                    dt_when_long_setup_happened = pd.NaT if not when_long_setup_happened.any() else when_long_setup_happened.idxmax()
 
-                if dt_when_long_setup_happened is not pd.NaT:
-                    last_valid_zone = which_demand_zone_generated_each_long_signal.zone_dt.last_valid_index()
-                    if last_valid_zone is not None:
-                        zone_which_generated_last_long_signal = which_demand_zone_generated_each_long_signal.loc[
-                            last_valid_zone
-                        ]
-                    else:
-                        zone_which_generated_last_long_signal = None
+                    if dt_when_long_setup_happened is not pd.NaT:
+                        last_valid_zone = which_demand_zone_generated_each_long_signal.zone_dt.last_valid_index()
+                        if last_valid_zone is not None:
+                            zone_which_generated_last_long_signal = which_demand_zone_generated_each_long_signal.loc[
+                                last_valid_zone
+                            ]
+                        else:
+                            zone_which_generated_last_long_signal = None
 
-                    if zone_which_generated_last_long_signal is None or zone_which_generated_last_long_signal.zone_dt != zone_dt:
-                        print(f'* Long setup happened at {dt_when_long_setup_happened}. Calculating limit, stop loss, and profit target prices *')
-                        long_signals[dt_when_long_setup_happened] = True
+                        if zone_which_generated_last_long_signal is None or zone_which_generated_last_long_signal.zone_dt != zone_dt:
+                            print(f'* Long setup happened at {dt_when_long_setup_happened}. Calculating limit, stop loss, and profit target prices *')
+                            long_signals[dt_when_long_setup_happened] = True
 
-                        idx_to_include_when_long_setup_happened = small_price_bars[dt_when_long_setup_happened:].index
+                            idx_to_include_when_long_setup_happened = small_price_bars[dt_when_long_setup_happened:].index
 
-                        lowest_bar_since_demand_zone_was_hit = small_price_bars.loc[
-                            dt_when_demand_zone_was_hit:idx_to_include_when_long_setup_happened[min(1, len(idx_to_include_when_long_setup_happened))], 'LOW'
-                        ].idxmin()
+                            lowest_bar_since_demand_zone_was_hit = small_price_bars.loc[
+                                dt_when_demand_zone_was_hit:idx_to_include_when_long_setup_happened[min(1, len(idx_to_include_when_long_setup_happened))], 'LOW'
+                            ].idxmin()
 
-                        limit_price = small_price_bars.loc[lowest_bar_since_demand_zone_was_hit, 'HIGH']
-                        stop_loss_level = small_price_bars.loc[lowest_bar_since_demand_zone_was_hit, 'LOW']
-                        profit_target_level = limit_price + rr * (limit_price - stop_loss_level)
+                            limit_price = small_price_bars.loc[lowest_bar_since_demand_zone_was_hit, 'HIGH']
+                            stop_loss_level = small_price_bars.loc[lowest_bar_since_demand_zone_was_hit, 'LOW']
+                            profit_target_level = limit_price + rr * (limit_price - stop_loss_level)
 
-                        long_limit_prices[dt_when_long_setup_happened] = limit_price
-                        long_stop_loss_levels[dt_when_long_setup_happened] = stop_loss_level
-                        long_profit_target_levels[dt_when_long_setup_happened] = profit_target_level
+                            long_limit_prices[dt_when_long_setup_happened] = limit_price
+                            long_stop_loss_levels[dt_when_long_setup_happened] = stop_loss_level
+                            long_profit_target_levels[dt_when_long_setup_happened] = profit_target_level
 
-                        which_demand_zone_generated_each_long_signal.loc[dt_when_long_setup_happened, 'zone_dt'] = zone_dt
-                        which_demand_zone_generated_each_long_signal.loc[dt_when_long_setup_happened, 'HIGH'] = demand_zones.loc[zone_dt, 'HIGH']
-                        which_demand_zone_generated_each_long_signal.loc[dt_when_long_setup_happened, 'LOW'] = demand_zones.loc[zone_dt, 'LOW']
+                            which_demand_zone_generated_each_long_signal.loc[dt_when_long_setup_happened, 'zone_dt'] = zone_dt
+                            which_demand_zone_generated_each_long_signal.loc[dt_when_long_setup_happened, 'HIGH'] = demand_zones.loc[zone_dt, 'HIGH']
+                            which_demand_zone_generated_each_long_signal.loc[dt_when_long_setup_happened, 'LOW'] = demand_zones.loc[zone_dt, 'LOW']
 
     print("******* Checking for short setups formed in supply zones *******")
     for dt_when_supply_zone_was_hit, zones_dts in when_price_hit_which_supply_zone.items():
@@ -182,45 +169,46 @@ def orion(minute_bars: pd.DataFrame, sessions: Session, big_timeframe='30T', sma
             print(f'*** Supply zone formed at {zone_dt} and canceled at {dt_when_to_cancel_zone}, was hit at ' + (
                 f'{dt_when_supply_zone_was_hit}. Checking for setups ***')
             )
-            dt_when_to_start_to_look_for_setups = small_price_bars.loc[dt_when_supply_zone_was_hit:].index[1]
-            if dt_when_to_start_to_look_for_setups < dt_when_to_cancel_zone:
-                when_short_setup_happened = (
-                    small_price_bars.loc[dt_when_to_start_to_look_for_setups:dt_when_to_cancel_zone, 'FINAL'].lt(
-                        green_fractal_prices.shift(1).ffill()[dt_when_to_start_to_look_for_setups:dt_when_to_cancel_zone]
+            if dt_when_supply_zone_was_hit < small_price_bars.index[-1]:
+                dt_when_to_start_to_look_for_setups = small_price_bars.loc[dt_when_supply_zone_was_hit:].index[1]
+                if dt_when_to_start_to_look_for_setups < dt_when_to_cancel_zone:
+                    when_short_setup_happened = (
+                        small_price_bars.loc[dt_when_to_start_to_look_for_setups:dt_when_to_cancel_zone, 'FINAL'].lt(
+                            green_fractals_prices.ffill()[dt_when_to_start_to_look_for_setups:dt_when_to_cancel_zone]
+                        )
                     )
-                )
-                dt_when_short_setup_happened = pd.NaT if not when_short_setup_happened.any() else when_short_setup_happened.idxmax()
+                    dt_when_short_setup_happened = pd.NaT if not when_short_setup_happened.any() else when_short_setup_happened.idxmax()
 
-                if dt_when_short_setup_happened is not pd.NaT:
-                    last_valid_zone = which_supply_zone_generated_each_short_signal.zone_dt.last_valid_index()
-                    if last_valid_zone is not None:
-                        zone_which_generated_last_short_signal = which_supply_zone_generated_each_short_signal.loc[
-                            last_valid_zone
-                        ]
-                    else:
-                        zone_which_generated_last_short_signal = None
+                    if dt_when_short_setup_happened is not pd.NaT:
+                        last_valid_zone = which_supply_zone_generated_each_short_signal.zone_dt.last_valid_index()
+                        if last_valid_zone is not None:
+                            zone_which_generated_last_short_signal = which_supply_zone_generated_each_short_signal.loc[
+                                last_valid_zone
+                            ]
+                        else:
+                            zone_which_generated_last_short_signal = None
 
-                    if zone_which_generated_last_short_signal is None or zone_which_generated_last_short_signal.zone_dt != zone_dt:
-                        print(f'* Short setup happened at {dt_when_short_setup_happened}. Calculating limit, stop loss, and profit target prices *')
-                        short_signals[dt_when_short_setup_happened] = True
+                        if zone_which_generated_last_short_signal is None or zone_which_generated_last_short_signal.zone_dt != zone_dt:
+                            print(f'* Short setup happened at {dt_when_short_setup_happened}. Calculating limit, stop loss, and profit target prices *')
+                            short_signals[dt_when_short_setup_happened] = True
 
-                        idx_to_include_when_short_setup_happened = small_price_bars[dt_when_short_setup_happened:].index
+                            idx_to_include_when_short_setup_happened = small_price_bars[dt_when_short_setup_happened:].index
 
-                        highest_bar_since_supply_zone_was_hit = small_price_bars.loc[
-                            dt_when_supply_zone_was_hit:idx_to_include_when_short_setup_happened[min(1, len(idx_to_include_when_short_setup_happened))], 'HIGH'
-                        ].idxmax()
+                            highest_bar_since_supply_zone_was_hit = small_price_bars.loc[
+                                dt_when_supply_zone_was_hit:idx_to_include_when_short_setup_happened[min(1, len(idx_to_include_when_short_setup_happened))], 'HIGH'
+                            ].idxmax()
 
-                        limit_price = small_price_bars.loc[highest_bar_since_supply_zone_was_hit, 'LOW']
-                        stop_loss_level = small_price_bars.loc[highest_bar_since_supply_zone_was_hit, 'HIGH']
-                        profit_target_level = limit_price - rr * (stop_loss_level - limit_price)
+                            limit_price = small_price_bars.loc[highest_bar_since_supply_zone_was_hit, 'LOW']
+                            stop_loss_level = small_price_bars.loc[highest_bar_since_supply_zone_was_hit, 'HIGH']
+                            profit_target_level = limit_price - rr * (stop_loss_level - limit_price)
 
-                        short_limit_prices[dt_when_short_setup_happened] = limit_price
-                        short_stop_loss_levels[dt_when_short_setup_happened] = stop_loss_level
-                        short_profit_target_levels[dt_when_short_setup_happened] = profit_target_level
-    
-                        which_supply_zone_generated_each_short_signal.loc[dt_when_short_setup_happened, 'zone_dt'] = zone_dt
-                        which_supply_zone_generated_each_short_signal.loc[dt_when_short_setup_happened, 'HIGH'] = supply_zones.loc[zone_dt, 'HIGH']
-                        which_supply_zone_generated_each_short_signal.loc[dt_when_short_setup_happened, 'LOW'] = supply_zones.loc[zone_dt, 'LOW']
+                            short_limit_prices[dt_when_short_setup_happened] = limit_price
+                            short_stop_loss_levels[dt_when_short_setup_happened] = stop_loss_level
+                            short_profit_target_levels[dt_when_short_setup_happened] = profit_target_level
+
+                            which_supply_zone_generated_each_short_signal.loc[dt_when_short_setup_happened, 'zone_dt'] = zone_dt
+                            which_supply_zone_generated_each_short_signal.loc[dt_when_short_setup_happened, 'HIGH'] = supply_zones.loc[zone_dt, 'HIGH']
+                            which_supply_zone_generated_each_short_signal.loc[dt_when_short_setup_happened, 'LOW'] = supply_zones.loc[zone_dt, 'LOW']
 
     print("******* Done calculating signals *******")
     # signals = long_signals.astype(int) - short_signals.astype(int)
@@ -234,6 +222,8 @@ def orion(minute_bars: pd.DataFrame, sessions: Session, big_timeframe='30T', sma
         short_stop_loss_prices=short_stop_loss_levels,
         long_profit_taker=long_profit_target_levels,
         short_profit_taker=short_profit_target_levels,
+        swing_highs=swing_highs,
+        swing_lows=swing_lows,
         demand_zones=demand_zones,
         supply_zones=supply_zones,
         when_price_hit_which_demand_zone=when_price_hit_which_demand_zone,
@@ -242,14 +232,22 @@ def orion(minute_bars: pd.DataFrame, sessions: Session, big_timeframe='30T', sma
         which_supply_zone_generated_each_short_signal=which_supply_zone_generated_each_short_signal,
         red_fractals=red_fractals,
         green_fractals=green_fractals,
-        red_fractal_prices=red_fractal_prices,
-        green_fractal_prices=green_fractal_prices,
+        red_fractals_prices=red_fractals_prices,
+        green_fractals_prices=green_fractals_prices,
     )
 
     return return_dict
 
 
-def rachel_t_fractals(price_bars: pd.DataFrame):
+def rachel_t_fractals(
+    price_bars: pd.DataFrame,
+    showPatterns: bool = False,
+    filterBW: bool = False,
+    ShowHHLL: bool = False,
+    ShowTimeFractals1: bool = False,
+    timeframe1: str = '240 min',
+    showZigZag: bool = True,
+):
     def is_regular_fractal(bars: pd.DataFrame) -> pd.Series:
         high = bars['HIGH']
         low = bars['LOW']
@@ -305,11 +303,16 @@ def rachel_t_fractals(price_bars: pd.DataFrame):
             low.shift(2).fillna(0) < low
         )).iloc[4:]
 
-        ret = 1 if bull else (-1 if bear else 0)
+        ret = pd.Series(1, index=bars.index).where(bull, other=pd.Series(-1, index=bars.index).where(bear, other=0))
         return ret
 
-    filteredtopf = is_regular_fractal(price_bars) > 0
-    filteredbotf = is_regular_fractal(price_bars) < 0
+    filteredtopf = is_regular_fractal(price_bars) > 0 if filterBW else is_bw_fractal(price_bars) > 0
+    filteredbotf = is_regular_fractal(price_bars) < 0 if filterBW else is_bw_fractal(price_bars) < 0
+
+    red_fractals = filteredtopf
+    red_fractal_prices = price_bars.loc[red_fractals.shift(-2).fillna(False), 'HIGH'].reindex_like(red_fractals).shift(2)
+    green_fractals = filteredbotf
+    green_fractals_prices = price_bars.loc[green_fractals.shift(-2).fillna(False), 'LOW'].reindex_like(green_fractals).shift(2)
 
     high2 = price_bars['HIGH'].shift(2)
     low2 = price_bars['LOW'].shift(2)
@@ -335,32 +338,33 @@ def rachel_t_fractals(price_bars: pd.DataFrame):
 
         return pd.DataFrame(dict(hh=hh, lh=lh, hl=hl, ll=ll))
 
-    def isTFFractal(mode: int, bars: pd.DataFrame, tf: int) -> pd.Series:
+    def isTFFractal(mode: int, bars: pd.DataFrame, tf: str) -> pd.Series:
         hhll_ret = hhll(bars)
         hh = hhll_ret['hh']
         ll = hhll_ret['ll']
 
-        valuewhen_hh = high2.where(hh, -VERY_BIG_NUMBER).ge(bars['HIGH'].shift(tf), 0)
-        valuewhen_ll = low2.where(ll, VERY_BIG_NUMBER).le(bars['LOW'].shift(tf), 0)
+        higher_timeframe_bars = bars.resample(tf).agg(
+            {
+                'OPEN': 'first',
+                'HIGH': 'max',
+                'LOW': 'min',
+                'FINAL': 'last',
+                'VOLUME': 'sum',
+            }
+        ).iloc[-1]
+
+        valuewhen_hh = high2.where(hh, -VERY_BIG_NUMBER).ge(higher_timeframe_bars['HIGH'], 0)
+        valuewhen_ll = low2.where(ll, VERY_BIG_NUMBER).le(higher_timeframe_bars['LOW'], 0)
         ret = valuewhen_hh.astype(int) if mode == 1 else (valuewhen_ll if mode == -1 else pd.Series(False).reindex_like(valuewhen_hh).fillna(False))
         ret.reindex_like(hhll_ret).fillna(False)
 
         return ret
 
-    tf = 240
-    higherhhigh = isTFFractal(1, price_bars, tf).where(hhll(price_bars)['hh']).reindex_like(price_bars['FINAL']).fillna(False)  # Maroon above bar, offset=-2
-    lowerllow = isTFFractal(-1, price_bars, tf).where(hhll(price_bars)['ll']).reindex_like(price_bars['FINAL']).fillna(False)   # Green below bar, offset=-2
+    higherhhigh = isTFFractal(1, price_bars, timeframe1).where(hhll(price_bars)['hh']).reindex_like(price_bars['FINAL']).fillna(False)  # Maroon above bar, offset=-2
+    lowerllow = isTFFractal(-1, price_bars, timeframe1).where(hhll(price_bars)['ll']).reindex_like(price_bars['FINAL']).fillna(False)   # Green below bar, offset=-2
 
-    """
-    
-    plotshape(ShowTimeFractals1 ? higherhhigh : na, title='Timed Top Fractals', style=shape.square, location=location.abovebar, color=maroon, text="[TH]", offset=-2)
-    plotshape(ShowTimeFractals1 ? lowerllow : na, title='Timed Bottom Fractals', style=shape.square, location=location.belowbar, color=green, text="[TL]", offset=-2)
-    
-    """
-
-    show_time_fractals = False
-    istop = higherhhigh if show_time_fractals else filteredtopf
-    isbot = lowerllow if show_time_fractals else filteredbotf
+    istop = higherhhigh if ShowTimeFractals1 else filteredtopf
+    isbot = lowerllow if ShowTimeFractals1 else filteredbotf
     topcount = bars_since(istop)
     botcount = bars_since(isbot)
 
@@ -388,11 +392,6 @@ def rachel_t_fractals(price_bars: pd.DataFrame):
     xad.loc[(~np.isfinite(xad)) | (xad == 0.0)] = np.nan
     abc.loc[(~np.isfinite(abc)) | (abc == 0.0)] = np.nan
     bcd.loc[(~np.isfinite(bcd)) | (bcd == 0.0)] = np.nan
-
-    # xab = xab.ffill().fillna(0)
-    # xad = xad.ffill().fillna(0)
-    # abc = abc.ffill().fillna(0)
-    # bcd = bcd.ffill().fillna(0)
 
     def isBat(_mode):
         _xab = (xab >= 0.382) & (xab <= 0.5)
@@ -476,17 +475,27 @@ def rachel_t_fractals(price_bars: pd.DataFrame):
         _xad = (xad >= 2.000) & (xad <= 2.236)
         return _xab & _abc & _bcd & _xad & (d < c if _mode == 1 else d > c)
 
-    fractals = pd.Series(0).reindex_like(price_bars['FINAL']).fillna(0)
-    fractals.loc[
-        isABCD(-1) | isBat(-1) | isAltBat(-1) | isButterfly(-1) | isGartley(-1) | isCrab(-1) | isShark(-1) | is5o(-1) | isWolf(-1) | isHnS(-1) | isConTria(-1) | isExpTria(-1)
-    ] = -1
-    fractals.loc[
-        isABCD(1) | isBat(1) | isAltBat(1) | isButterfly(1) | isGartley(1) | isCrab(1) | isShark(1) | is5o(1) | isWolf(1) | isHnS(1) | isConTria(1) | isExpTria(1)
-    ] = 1
+    if showPatterns:
+        fractals = pd.Series(0, index=price_bars.index)
+        fractals.loc[
+            isABCD(-1) | isBat(-1) | isAltBat(-1) | isButterfly(-1) | isGartley(-1) | isCrab(-1) | isShark(-1) | is5o(-1) | isWolf(-1) | isHnS(-1) | isConTria(-1) | isExpTria(-1)
+        ] = -1
+        fractals.loc[
+            isABCD(1) | isBat(1) | isAltBat(1) | isButterfly(1) | isGartley(1) | isCrab(1) | isShark(1) | is5o(1) | isWolf(1) | isHnS(1) | isConTria(1) | isExpTria(1)
+        ] = 1
+        fractals.loc[fractals.eq(fractals.shift(1))] = 0
 
-    fractals.loc[fractals.eq(fractals.shift(1))] = 0
+    # return_df = pd.concat(
+    #     [
+    #         red_fractals,
+    #         red_fractals_price_idxs,
+    #         green_fractals,
+    #         green_fractals_price_idxs,
+    #     ],
+    #     axis=1,
+    # )
 
-    return fractals
+    return red_fractals, red_fractal_prices, green_fractals, green_fractals_prices
 
 
 def bars_since(series: pd.Series):
@@ -683,7 +692,7 @@ def ob(ohlc: pd.DataFrame, swing_highs_lows: pd.DataFrame, close_mitigation: boo
                                       ) * 100.0
                 closeIndexes[obIndex] = close_index
 
-    for i in range(len(ohlc)):
+    for i in range(ohlc_len):
         close_index = i
         close_price = _close[close_index]
 
@@ -764,6 +773,99 @@ def ob(ohlc: pd.DataFrame, swing_highs_lows: pd.DataFrame, close_mitigation: boo
     )
 
 
+def get_zones(bars: pd.DataFrame, length: int = 50):
+    price_index_series = bars.index.to_series()
+    supply_zones = pd.DataFrame(dict(HIGH=np.nan, LOW=np.nan, idx=pd.NaT), index=bars.index)
+    demand_zones = pd.DataFrame(dict(HIGH=np.nan, LOW=np.nan, idx=pd.NaT), index=bars.index)
+
+    open = bars.OPEN
+    high = bars.HIGH
+    low = bars.LOW
+    close = bars.FINAL
+
+    def atr(length: int = 14):
+        true_range = pd.concat([(high - low), (high - close.shift(1)).abs()], axis=1).max(axis=1)
+        true_range = pd.concat([true_range, (low - close.shift(1)).abs()], axis=1).max(axis=1)
+        true_range.iloc[0] = high.iloc[0] - low.iloc[0]
+
+        return true_range.rolling(length).mean()
+
+    ATR = atr()
+
+    def swings(len: int):
+        upper = high.rolling(len).max()
+        lower = low.rolling(len).min()
+
+        os = pd.Series(0, index=bars.index).where(
+            high.shift(len).gt(upper), other=pd.Series(1, index=bars.index).where(
+                low.shift(len).lt(lower), np.nan
+            )
+        ).ffill().fillna(0)
+
+        top = high.shift(len).where(os.eq(0) & os.shift(1).fillna(0).ne(0), other=0)
+        btm = low.shift(len).where(os.eq(1) & os.shift(1).fillna(0).ne(1), other=0)
+
+        return top, btm
+
+    def ob_coord(use_max, len, n):
+        min = np.inf
+        max = -np.inf
+        idx = 1
+
+        ob_threshold = ATR
+
+        # Search for highest/lowest high within the structure interval and get range
+        if use_max:
+            for i in range(1, len):
+                if (high.iloc[n-i] - low.iloc[n-i]) < ob_threshold[n-i] * 2:
+                    max = np.max([high.iloc[n-i], max])
+                    min = low.iloc[n-i] if max == high.iloc[n-i] else min
+                    idx = i if max == high.iloc[n-i] else idx
+        else:
+            for i in range(1, len):
+                if (high.iloc[n-i] - low.iloc[n-i]) < ob_threshold[n-i] * 2:
+                    min = np.min([low.iloc[n-i], min])
+                    max = high.iloc[n-i] if min == low.iloc[n-i] else max
+                    idx = i if min == low.iloc[n-i] else idx
+
+        return dict(HIGH=max, LOW=min, idx=price_index_series.iloc[idx])
+
+    def crossover(series1, series2):
+        return series1.gt(series2) & series1.shift(1).le(series2.shift(1))
+
+    def crossunder(series1, series2):
+        return series1.lt(series2) & series1.shift(1).ge(series2.shift(1))
+
+    top, btm = swings(length)
+    itop, ibtm = swings(5)
+
+    top_y = top
+    top_x = price_index_series.shift(length)
+
+    itop_y = itop
+    itop_x = price_index_series.shift(5)
+    itop_cross = True
+
+    btm_y = btm
+    btm_x = price_index_series.shift(length)
+
+    ibtm_y = ibtm
+    ibtm_x = price_index_series.shift(5)
+    ibtm_cross = True
+
+    when_to_show_bullish_obs = crossover(close, itop_y) # & itop_cross & top_y.ne(itop_y)
+    dts_when_to_show_bullish_obs = when_to_show_bullish_obs.loc[when_to_show_bullish_obs].index
+    for dt in dts_when_to_show_bullish_obs:
+        demand_zones.loc[dt] = ob_coord(False, 5, bars.index.get_indexer([dt])[0])
+
+    when_to_show_bearish_obs = crossunder(close, ibtm_y) # & ibtm_cross & btm_y.ne(ibtm_y)
+    dts_when_to_show_bearish_obs = when_to_show_bearish_obs.loc[when_to_show_bearish_obs].index
+    for dt in dts_when_to_show_bearish_obs:
+        supply_zones.loc[dt] = ob_coord(True, 5, bars.index.get_indexer([dt])[0])
+
+    return demand_zones.dropna(), supply_zones.dropna(), itop_y, ibtm_y
+
+
 if __name__ == "__main__":
     from syscore.fileutils import get_resolved_pathname
     import mplfinance as mpf
@@ -804,15 +906,25 @@ if __name__ == "__main__":
     when_price_hit_which_demand_zone = orion_trades['when_price_hit_which_demand_zone'].reset_index()[0]
     when_price_hit_which_supply_zone = orion_trades['when_price_hit_which_supply_zone'].reset_index()[0]
 
+    swing_highs = orion_trades['swing_highs']
+    swing_highs.loc[swing_highs.eq(0)] = np.nan
+    swing_highs = swing_highs.reindex_like(small_price_bars['FINAL'])
+
+    swing_lows = orion_trades['swing_lows']
+    swing_lows.loc[swing_lows.eq(0)] = np.nan
+    swing_lows = swing_lows.reindex_like(small_price_bars['FINAL'])
+
     apds = [
-        mpf.make_addplot(small_price_bars['LOW'].where(long_signals, np.nan), type='scatter', marker='^'),
-        mpf.make_addplot(small_price_bars['HIGH'].where(short_signals, np.nan), type='scatter', marker='v'),
-        mpf.make_addplot(orion_trades['red_fractal_prices'], type='scatter', color='red', marker='v'),
-        mpf.make_addplot(orion_trades['green_fractal_prices'], type='scatter', color='green', marker='^'),
-        mpf.make_addplot(orion_trades['long_stop_loss_prices'], type='line'),
-        mpf.make_addplot(orion_trades['long_profit_taker'], type='line'),
-        mpf.make_addplot(orion_trades['short_stop_loss_prices'], type='line'),
-        mpf.make_addplot(orion_trades['short_profit_taker'], type='line'),
+        # mpf.make_addplot(small_price_bars['LOW'].where(long_signals, np.nan), type='scatter', marker='^'),
+        # mpf.make_addplot(small_price_bars['HIGH'].where(short_signals, np.nan), type='scatter', marker='v'),
+        mpf.make_addplot(swing_highs, type='scatter', color='purple', marker='x'),
+        mpf.make_addplot(swing_lows, type='scatter', color='yellow', marker='x'),
+        # mpf.make_addplot(orion_trades['red_fractals_prices'], type='scatter', color='red', marker='v'),
+        # mpf.make_addplot(orion_trades['green_fractals_prices'], type='scatter', color='green', marker='^'),
+        # mpf.make_addplot(orion_trades['long_stop_loss_prices'], type='line'),
+        # mpf.make_addplot(orion_trades['long_profit_taker'], type='line'),
+        # mpf.make_addplot(orion_trades['short_stop_loss_prices'], type='line'),
+        # mpf.make_addplot(orion_trades['short_profit_taker'], type='line'),
     ]
 
     demand_zones_dts = pd.Series([x[i] for x in when_price_hit_which_demand_zone.values for i in range(len(x))]).drop_duplicates()
@@ -822,7 +934,7 @@ if __name__ == "__main__":
         dt_when_to_cancel_zone = small_price_bars.index[
             -1] if not dt_when_to_cancel_zone.any() else dt_when_to_cancel_zone.idxmax()
 
-        demand_zone = pd.DataFrame(dict(zip(demand_zone.index, demand_zone.values)), index=small_price_bars.loc[dt:dt_when_to_cancel_zone].index).reindex_like(
+        demand_zone = pd.DataFrame(dict(zip(demand_zone.index, demand_zone[['HIGH', 'LOW']].values)), index=small_price_bars.loc[dt:dt_when_to_cancel_zone].index).reindex_like(
             small_price_bars[['HIGH', 'LOW']]
         )
 
@@ -846,7 +958,7 @@ if __name__ == "__main__":
         dt_when_to_cancel_zone = small_price_bars.index[
             -1] if not dt_when_to_cancel_zone.any() else dt_when_to_cancel_zone.idxmax()
 
-        supply_zone = pd.DataFrame(dict(zip(supply_zone.index, supply_zone.values)), index=small_price_bars.loc[dt:dt_when_to_cancel_zone].index).reindex_like(
+        supply_zone = pd.DataFrame(dict(zip(supply_zone.index, supply_zone[['HIGH', 'LOW']].values)), index=small_price_bars.loc[dt:dt_when_to_cancel_zone].index).reindex_like(
             small_price_bars[['HIGH', 'LOW']]
         )
 

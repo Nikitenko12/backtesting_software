@@ -223,14 +223,14 @@ def apply_limit_prices_slpt_to_signals(
             )
             path_dep_df_after_limit_prices.drop(index=previous_dt, inplace=True)
             previous_dt = dt
-            previous_row = row.copy()
+            previous_row = copy(row)
         elif dt <= previous_row.dt_when_trade_exited:
             print(f'*** Signal generated at {dt} before previous order exited at {previous_row.dt_when_trade_exited}. Dropping signal ***')
             path_dep_df_after_limit_prices.drop(index=dt, inplace=True)
         else:
             print(f'*** Everything seems fine over here. Keeping signal ***')
             previous_dt = dt
-            previous_row = row.copy()
+            previous_row = copy(row)
 
     print(f'******* Done checking signals. There were {len(path_dep_df_after_limit_prices.index)} trades ' + (
         f'from {price_index_series.iloc[0]} to {price_index_series.iloc[-1]} *******')
@@ -239,10 +239,17 @@ def apply_limit_prices_slpt_to_signals(
         path_dep_df_after_limit_prices.dt_when_trade_exited == path_dep_df_after_limit_prices.dt_when_this_session_ended,
         'dt_for_first_bar_in_next_session'
     ].dropna()
+    first_index_after_exit = price_index_series.shift(-1).loc[price_index_series.asof(path_dep_df_after_limit_prices.dt_when_trade_exited)]
+    first_index_after_exit_for_long_trades = price_index_series.shift(-1).loc[price_index_series.asof(
+        path_dep_df_after_limit_prices.dt_when_trade_exited.loc[path_dep_df_after_limit_prices.signals > 0]
+    )]
+    first_index_after_exit_for_short_trades = price_index_series.shift(-1).loc[price_index_series.asof(
+        path_dep_df_after_limit_prices.dt_when_trade_exited.loc[path_dep_df_after_limit_prices.signals < 0]
+    )]
 
     forecasts = pd.Series(np.nan, index=prices.index)
-    forecasts[path_dep_df_after_limit_prices.dt_when_limit_price_was_hit] = signals[path_dep_df_after_limit_prices.index]
-    forecasts[price_index_series.asof(path_dep_df_after_limit_prices.dt_when_trade_exited)] = 0
+    forecasts[path_dep_df_after_limit_prices.dt_when_limit_price_was_hit] = path_dep_df_after_limit_prices.signals
+    forecasts[first_index_after_exit] = 0
     forecasts[next_session_if_exited_trade_at_eod] = 0
     forecasts = forecasts.ffill().fillna(0)
 
@@ -250,9 +257,7 @@ def apply_limit_prices_slpt_to_signals(
     new_long_limit_prices[
         path_dep_df_after_limit_prices.dt_when_limit_price_was_hit[path_dep_df_after_limit_prices.signals > 0]
     ] = long_limit_prices.loc[path_dep_df_after_limit_prices.loc[path_dep_df_after_limit_prices.signals > 0].index]
-    new_long_limit_prices[
-        price_index_series.asof(path_dep_df_after_limit_prices.dt_when_trade_exited[path_dep_df_after_limit_prices.signals > 0])
-    ] = 0
+    new_long_limit_prices[first_index_after_exit_for_long_trades] = 0
     new_long_limit_prices[next_session_if_exited_trade_at_eod] = 0
     new_long_limit_prices = new_long_limit_prices.ffill().replace(0, np.nan)
 
@@ -260,9 +265,7 @@ def apply_limit_prices_slpt_to_signals(
     new_short_limit_prices[
         path_dep_df_after_limit_prices.dt_when_limit_price_was_hit[path_dep_df_after_limit_prices.signals < 0]
     ] = short_limit_prices.loc[path_dep_df_after_limit_prices.loc[path_dep_df_after_limit_prices.signals < 0].index]
-    new_short_limit_prices[
-        price_index_series.asof(path_dep_df_after_limit_prices.dt_when_trade_exited[path_dep_df_after_limit_prices.signals < 0])
-    ] = 0
+    new_short_limit_prices[first_index_after_exit_for_short_trades] = 0
     new_short_limit_prices[next_session_if_exited_trade_at_eod] = 0
     new_short_limit_prices = new_short_limit_prices.ffill().replace(0, np.nan)
 
@@ -273,7 +276,7 @@ def apply_limit_prices_slpt_to_signals(
     stop_loss_levels[
         path_dep_df_after_limit_prices.dt_when_limit_price_was_hit[path_dep_df_after_limit_prices.signals < 0]
     ] = short_stop_loss_levels.loc[path_dep_df_after_limit_prices.loc[path_dep_df_after_limit_prices.signals < 0].index]
-    stop_loss_levels[price_index_series.asof(path_dep_df_after_limit_prices.dt_when_trade_exited)] = 0
+    stop_loss_levels[first_index_after_exit] = 0
     stop_loss_levels[next_session_if_exited_trade_at_eod] = 0
     stop_loss_levels = stop_loss_levels.ffill().replace(0, np.nan)
 
@@ -284,7 +287,7 @@ def apply_limit_prices_slpt_to_signals(
     profit_target_levels[
         path_dep_df_after_limit_prices.dt_when_limit_price_was_hit[path_dep_df_after_limit_prices.signals < 0]
     ] = short_profit_target_levels.loc[path_dep_df_after_limit_prices.loc[path_dep_df_after_limit_prices.signals < 0].index]
-    profit_target_levels[price_index_series.asof(path_dep_df_after_limit_prices.dt_when_trade_exited)] = 0
+    profit_target_levels[first_index_after_exit] = 0
     profit_target_levels[next_session_if_exited_trade_at_eod] = 0
     profit_target_levels = profit_target_levels.ffill().replace(0, np.nan)
 
@@ -858,8 +861,8 @@ if __name__ == "__main__":
     new_apds = [
         mpf.make_addplot(small_price_bars['LOW'].where(new_signals > 0, np.nan), type='scatter', marker='^'),
         mpf.make_addplot(small_price_bars['HIGH'].where(new_signals < 0, np.nan), type='scatter', marker='v'),
-        mpf.make_addplot(orion_trades['red_fractal_prices'], type='scatter', color='red', marker='v'),
-        mpf.make_addplot(orion_trades['green_fractal_prices'], type='scatter', color='green', marker='^'),
+        mpf.make_addplot(orion_trades['red_fractals_prices'], type='scatter', color='red', marker='v'),
+        mpf.make_addplot(orion_trades['green_fractals_prices'], type='scatter', color='green', marker='^'),
         mpf.make_addplot(new_orion_trades['long_limit_prices_after_slpt'], type='line', color='blue'),
         mpf.make_addplot(new_orion_trades['short_limit_prices_after_slpt'], type='line', color='blue'),
         mpf.make_addplot(
@@ -947,6 +950,86 @@ if __name__ == "__main__":
         addplot=new_apds,
     )
 
-    orion_trades_df = pd.DataFrame(orion_trades)
-    # orion_trades_which_hit_limit_prices_df = pd.DataFrame(orion_trades_which_hit_limit_prices)
-    new_orion_trades_df = pd.DataFrame({k: v for k, v in new_orion_trades.items() if k != 'path_dep_df'})
+    path_dep_df = new_orion_trades.pop('path_dep_df')
+    new_orion_trades = pd.DataFrame(new_orion_trades)
+
+    price_index_series = small_price_bars.index.to_series()
+    trades = pd.DataFrame(dict(signal=0, position=0.0, entry_price=np.nan, exit_price=np.nan),
+                          index=small_price_bars.index)
+    trades_summary = pd.DataFrame(
+        dict(
+            signal=np.nan, signal_dt=pd.NaT, position=np.nan,
+            entry_price=np.nan, entry_dt=pd.NaT, exit_price=np.nan, exit_dt=pd.NaT,
+            exit_method='',
+        ),
+        index=path_dep_df.index
+    )
+    multiplier = 1000.0
+    risk_per_trade_pct_capital = 0.05
+    capital_allocated_to_instrument = 1000000
+    for signal_dt, trade_metadata in path_dep_df.iterrows():
+
+        entry_dt = trade_metadata.dt_when_limit_price_was_hit
+        exit_dt = price_index_series.asof(trade_metadata.dt_when_trade_exited)
+        idxs_in_the_market = trades.loc[entry_dt:exit_dt].index
+        signal = trade_metadata.signals
+
+        trades.loc[idxs_in_the_market, 'signal'] = signal
+        trades.loc[idxs_in_the_market, 'entry_price'] = small_price_bars.shift(1).loc[idxs_in_the_market, 'FINAL']
+        trades.loc[idxs_in_the_market, 'exit_price'] = small_price_bars.loc[idxs_in_the_market, 'FINAL']
+
+        if signal > 0:
+            limit_price = "long_limit_prices_after_slpt"
+        else:
+            limit_price = "short_limit_prices_after_slpt"
+
+        trades.loc[entry_dt, 'entry_price'] = new_orion_trades.loc[entry_dt, limit_price]
+        trade_risk = (
+            multiplier * (new_orion_trades.loc[entry_dt, limit_price] - new_orion_trades.loc[
+                entry_dt, 'stop_loss_levels_after_slpt'
+            ])
+        )
+        position_size_in_contracts = round(
+            (capital_allocated_to_instrument * risk_per_trade_pct_capital) / trade_risk
+        ) if trade_risk != 0 else 0
+
+        trades.loc[idxs_in_the_market, 'position'] = position_size_in_contracts
+
+        if trade_metadata.dt_when_trade_exited == trade_metadata.dt_when_this_session_ended:
+            exit_method = "EOD"
+            trades.loc[exit_dt, 'exit_price'] = small_price_bars.FINAL.asof(trade_metadata.dt_when_trade_exited)
+        elif trade_metadata.dt_when_trade_exited == trade_metadata.dt_when_stop_loss_was_hit:
+            exit_method = "Stop Loss"
+            trades.loc[exit_dt, 'exit_price'] = new_orion_trades.stop_loss_levels_after_slpt.asof(exit_dt)
+        elif trade_metadata.dt_when_trade_exited == trade_metadata.dt_when_profit_target_was_hit:
+            exit_method = "Profit Target"
+            trades.loc[exit_dt, 'exit_price'] = new_orion_trades.profit_target_levels_after_slpt.asof(exit_dt)
+        else:
+            exit_method = "None"
+            input("WARNING! Continue?")
+
+        trades_summary.loc[signal_dt] = (
+            signal, signal_dt, position_size_in_contracts,
+            trades.loc[entry_dt, 'entry_price'], entry_dt,
+            trades.loc[exit_dt, 'exit_price'], exit_dt,
+            exit_method
+        )
+
+    profit = trades['position'] * (trades['exit_price'] - trades['entry_price'])
+    returns = profit / trades['entry_price']
+    returns_relative_to_capital = profit / capital_allocated_to_instrument
+
+    profit.fillna(0, inplace=True)
+    returns.fillna(0, inplace=True)
+    returns_relative_to_capital.fillna(0, inplace=True)
+
+    import matplotlib.pyplot as plt
+
+    plt.figure()
+    plt.plot(profit.cumsum())
+
+    trades_summary['signal'] = ["L" if x == 1 else "S" for x in trades_summary['signal']]
+    trades_summary.reset_index(inplace=True, drop=True)
+    trades_summary.to_csv(get_resolved_pathname('private.systems.orion.trades_summary') + '.csv', sep='\t')
+
+    

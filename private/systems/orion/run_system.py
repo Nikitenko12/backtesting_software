@@ -84,7 +84,7 @@ if __name__ == "__main__":
 
     path_dep_df = forecast_after_slpt_dict.pop('path_dep_df')
 
-    new_orion_trades = pd.DataFrame(forecast_after_slpt_dict).tz_convert('EST')
+    new_orion_trades = pd.DataFrame(forecast_after_slpt_dict)
     new_signals = new_orion_trades['forecasts']
 
     where_values = new_orion_trades['long_limit_prices_after_slpt'].add(new_orion_trades['short_limit_prices_after_slpt'], fill_value=0)
@@ -180,27 +180,54 @@ if __name__ == "__main__":
         addplot=new_apds,
     )
 
-    trades = pd.DataFrame(dict(signal=np.nan, entry_price=np.nan, exit_price=np.nan), index=small_price_bars.index)
+    trades = pd.DataFrame(dict(signal=0, position=0.0, entry_price=np.nan, exit_price=np.nan), index=small_price_bars.index)
+    multiplier = orion_system.rawdata.get_value_of_block_price_move('CL')
+    risk_per_trade_pct_capital = orion_system.positionSize.get_risk_per_trade_pct_capital()
+    capital_allocated_to_instrument = orion_system.positionSize.get_capital_allocated_to_instrument('CL')
     for signal_dt, trade_metadata in path_dep_df.iterrows():
 
         entry_dt = trade_metadata.dt_when_limit_price_was_hit
-        exit_dt = trades.loc[trade_metadata.dt_when_trade_exited:].index[1]
+        exit_dt = trades.loc[trade_metadata.dt_when_trade_exited:].index[0]
         idxs_in_the_market = trades.loc[entry_dt:exit_dt].index
+        signal = trade_metadata.signals
 
-        trades.loc[idxs_in_the_market, 'signal'] = trade_metadata.signals
+        trades.loc[idxs_in_the_market, 'signal'] = signal
         trades.loc[idxs_in_the_market, 'entry_price'] = small_price_bars.shift(1).loc[idxs_in_the_market, 'FINAL']
-        trades.loc[idxs_in_the_market, 'exit_price'] = small_price_bars.loc[idxs_in_the_market, 'OPEN']
+        trades.loc[idxs_in_the_market, 'exit_price'] = small_price_bars.loc[idxs_in_the_market, 'FINAL']
 
-        trades.loc[entry_dt, 'entry_price'] = new_orion_trades.loc[entry_dt, 'long_limit_prices_after_slpt']
-        if trade_metadata.dt_when_trade_exited == trade_metadata.dt_when_session_ended:
+        if signal > 0:
+            limit_price = "long_limit_prices_after_slpt"
+        else:
+            limit_price = "short_limit_prices_after_slpt"
+
+        trades.loc[entry_dt, 'entry_price'] = new_orion_trades.loc[entry_dt, limit_price]
+        position_size_in_contracts = round(
+            (capital_allocated_to_instrument * risk_per_trade_pct_capital) / (
+                multiplier * (new_orion_trades.loc[entry_dt, limit_price] - new_orion_trades.loc[entry_dt, 'stop_loss_levels_after_slpt'])
+            )
+        )
+        trades.loc[idxs_in_the_market, 'position'] = position_size_in_contracts
+
+        if trade_metadata.dt_when_trade_exited == trade_metadata.dt_when_this_session_ended:
             trades.loc[exit_dt, 'exit_price'] = small_price_bars.FINAL.asof(trade_metadata.dt_when_trade_exited)
         elif trade_metadata.dt_when_trade_exited == trade_metadata.dt_when_stop_loss_was_hit:
-            trades.loc[exit_dt, 'exit_price'] = new_orion_trades.loc[trade_metadata.dt_when_trade_exited, 'stop_loss_levels_after_slpt']
+            trades.loc[exit_dt, 'exit_price'] = new_orion_trades.stop_loss_levels_after_slpt.asof(exit_dt)
         elif trade_metadata.dt_when_trade_exited == trade_metadata.dt_when_profit_target_was_hit:
-            trades.loc[exit_dt, 'exit_price'] = new_orion_trades.loc[trade_metadata.dt_when_trade_exited, 'profit_target_levels_after_slpt']
+            trades.loc[exit_dt, 'exit_price'] = new_orion_trades.profit_target_levels_after_slpt.asof(exit_dt)
         else:
             input("WARNING! Continue?")
 
+    profit = trades['position'] * (trades['exit_price'] - trades['entry_price'])
+    returns = profit / trades['entry_price']
+    returns_relative_to_capital = profit * 100/ capital_allocated_to_instrument
+
+    profit.fillna(0, inplace=True)
+    returns.fillna(0, inplace=True)
+    returns_relative_to_capital.fillna(0, inplace=True)
+
+    plt.figure()
+    returns_relative_to_capital.cumsum().plot()
+    # plt.grid()
 
     # from syscore.fileutils import resolve_path_and_filename_for_package
     #
