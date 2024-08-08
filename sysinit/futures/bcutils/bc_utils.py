@@ -359,7 +359,7 @@ def get_barchart_downloads(
             if max_exceeded:
                 break
 
-            for resolution in Resolution if do_daily else [Resolution.Hour, Resolution.Minute]:
+            for resolution in Resolution if do_daily else [Resolution.Minute]:
                 # work out instrument code and get config
                 market_code = contract[: len(contract) - 3]
                 instr_code = inv_contract_map[market_code.upper()]

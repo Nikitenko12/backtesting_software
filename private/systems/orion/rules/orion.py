@@ -40,21 +40,6 @@ def orion(minute_bars: pd.DataFrame, sessions: Session, big_timeframe='30T', sma
 
     print("******* Calculating supply and demand zones *******")
 
-    # swings = swing_highs_lows(big_price_bars, swing_length=5)
-    # order_blocks = ob(big_price_bars, swing_highs_lows=swings, close_mitigation=False).shift(1).dropna() # shift(1) because bar dt is bar open dt
-    #
-    # demand_zones_idx = order_blocks.loc[order_blocks.OB > 0].index
-    # supply_zones_idx = order_blocks.loc[order_blocks.OB < 0].index
-    #
-    # demand_zones = pd.DataFrame(
-    #     dict(HIGH=order_blocks.Top[demand_zones_idx].values, LOW=order_blocks.Bottom[demand_zones_idx].values),
-    #     index=big_price_bars.index[order_blocks.loc[demand_zones_idx, 'CloseIndex'].astype(int)]
-    # )
-    # supply_zones = pd.DataFrame(
-    #     dict(HIGH=order_blocks.Top[supply_zones_idx].values, LOW=order_blocks.Bottom[supply_zones_idx].values),
-    #     index=big_price_bars.index[order_blocks.loc[supply_zones_idx, 'CloseIndex'].astype(int)]
-    # )
-
     demand_zones, supply_zones, swing_highs, swing_lows = get_zones(big_price_bars)
 
     when_price_hit_which_demand_zone = pd.Series([list() for _ in small_price_bars.index], index=small_price_bars.index)
@@ -62,7 +47,7 @@ def orion(minute_bars: pd.DataFrame, sessions: Session, big_timeframe='30T', sma
 
     print("******* Checking when prices entered demand zones *******")
     for zone_dt, zone in demand_zones.iterrows():
-        print(f'Zone from {zone_dt}')
+        print(f'Demand zone from {zone_dt}')
         # input("Continue? ")
         dt_when_to_cancel_zone = small_price_bars.loc[zone_dt:, 'FINAL'].lt(zone.LOW)
         dt_when_to_cancel_zone = small_price_bars.index[-1] if not dt_when_to_cancel_zone.any() else dt_when_to_cancel_zone.idxmax()
@@ -80,12 +65,13 @@ def orion(minute_bars: pd.DataFrame, sessions: Session, big_timeframe='30T', sma
 
     print("******* Checking when prices entered supply zones *******")
     for zone_dt, zone in supply_zones.iterrows():
+        print(f'Supply zone from {zone_dt}')
         dt_when_to_cancel_zone = small_price_bars.loc[zone_dt:, 'FINAL'].gt(zone.HIGH)
         dt_when_to_cancel_zone = small_price_bars.index[-1] if not dt_when_to_cancel_zone.any() else dt_when_to_cancel_zone.idxmax()
 
         did_price_hit_this_supply_zone = (
-            small_price_bars.loc[zone_dt:dt_when_to_cancel_zone, 'LOW'].gt(zone.LOW) & (
-                small_price_bars.loc[zone_dt:dt_when_to_cancel_zone, 'LOW'].lt(zone.HIGH)
+            small_price_bars.loc[zone_dt:dt_when_to_cancel_zone, 'HIGH'].gt(zone.LOW) & (
+                small_price_bars.loc[zone_dt:dt_when_to_cancel_zone, 'HIGH'].lt(zone.HIGH)
             )
         )
         did_price_hit_this_supply_zone = did_price_hit_this_supply_zone.loc[did_price_hit_this_supply_zone]
@@ -806,22 +792,22 @@ def get_zones(bars: pd.DataFrame, length: int = 50):
 
         return top, btm
 
-    def ob_coord(use_max, len, n):
+    def ob_coord(use_max, loc, n):
         min = np.inf
-        max = -np.inf
+        max = 0.
         idx = 1
 
         ob_threshold = ATR
 
         # Search for highest/lowest high within the structure interval and get range
         if use_max:
-            for i in range(1, len):
+            for i in range(1, n-loc):
                 if (high.iloc[n-i] - low.iloc[n-i]) < ob_threshold[n-i] * 2:
                     max = np.max([high.iloc[n-i], max])
                     min = low.iloc[n-i] if max == high.iloc[n-i] else min
                     idx = i if max == high.iloc[n-i] else idx
         else:
-            for i in range(1, len):
+            for i in range(1, n-loc):
                 if (high.iloc[n-i] - low.iloc[n-i]) < ob_threshold[n-i] * 2:
                     min = np.min([low.iloc[n-i], min])
                     max = high.iloc[n-i] if min == low.iloc[n-i] else max
@@ -839,17 +825,21 @@ def get_zones(bars: pd.DataFrame, length: int = 50):
     itop, ibtm = swings(5)
 
     top_y = top
-    top_x = price_index_series.shift(length)
 
     itop_y = itop
-    itop_x = price_index_series.shift(5)
+    itop_x = pd.Series(
+        bars.index.get_indexer(price_index_series.shift(5).where(itop.astype(bool), pd.NaT).ffill().fillna(bars.index[0]).to_numpy()),
+        index=bars.index,
+    )
     itop_cross = True
 
     btm_y = btm
-    btm_x = price_index_series.shift(length)
 
     ibtm_y = ibtm
-    ibtm_x = price_index_series.shift(5)
+    ibtm_x = pd.Series(
+        bars.index.get_indexer(price_index_series.shift(5).where(ibtm.astype(bool), pd.NaT).ffill().fillna(bars.index[0]).to_numpy()),
+        index=bars.index,
+    )
     ibtm_cross = True
 
     latest_top_y = top_y.replace(0, np.nan).ffill().fillna(0)
@@ -858,17 +848,30 @@ def get_zones(bars: pd.DataFrame, length: int = 50):
     latest_btm_y = btm_y.replace(0, np.nan).ffill().fillna(0)
     latest_ibtm_y = ibtm_y.replace(0, np.nan).ffill().fillna(0)
 
-    when_to_show_bullish_obs = crossover(close, latest_itop_y) & latest_top_y.ne(latest_itop_y)
-    dts_when_to_show_bullish_obs = when_to_show_bullish_obs.loc[when_to_show_bullish_obs].index
-    for dt in dts_when_to_show_bullish_obs:
-        demand_zones.loc[dt] = ob_coord(False, 5, bars.index.get_indexer([dt])[0])
+    crossover_close_itop_y = crossover(close, latest_itop_y)
+    top_y_ne_itop_y = latest_top_y.ne(latest_itop_y)
+    for idx in bars.index:
+        if itop.loc[idx]:
+            itop_cross = True
+        if crossover_close_itop_y.loc[idx] and itop_cross and top_y_ne_itop_y.loc[idx]:
+            itop_cross = False
+            demand_zones.loc[idx] = ob_coord(False, itop_x[idx], bars.index.get_indexer([idx])[0])
 
-    when_to_show_bearish_obs = crossunder(close, latest_ibtm_y) & latest_btm_y.ne(latest_ibtm_y)
-    dts_when_to_show_bearish_obs = when_to_show_bearish_obs.loc[when_to_show_bearish_obs].index
-    for dt in dts_when_to_show_bearish_obs:
-        supply_zones.loc[dt] = ob_coord(True, 5, bars.index.get_indexer([dt])[0])
+    crossunder_close_ibtm_y = crossunder(close, latest_ibtm_y)
+    btm_y_ne_ibtm_y = latest_btm_y.ne(latest_ibtm_y)
+    for idx in bars.index:
+        if ibtm.loc[idx]:
+            ibtm_cross = True
+        if crossunder_close_ibtm_y.loc[idx] and ibtm_cross and btm_y_ne_ibtm_y.loc[idx]:
+            ibtm_cross = False
+            supply_zones.loc[idx] = ob_coord(True, ibtm_x[idx], bars.index.get_indexer([idx])[0])
 
-    return demand_zones.dropna(), supply_zones.dropna(), itop_y, ibtm_y
+    # when_to_show_bullish_obs = crossover_close_itop_y & itop_cross_series & top_y_ne_itop_y
+    # dts_when_to_show_bullish_obs = when_to_show_bullish_obs.loc[when_to_show_bullish_obs].index
+    # when_to_show_bearish_obs = crossunder_close_ibtm_y & ibtm_cross_series & btm_y_ne_ibtm_y
+    # dts_when_to_show_bearish_obs = when_to_show_bearish_obs.loc[when_to_show_bearish_obs].index
+
+    return demand_zones.shift(1).dropna(), supply_zones.shift(1).dropna(), itop_y, ibtm_y
 
 
 if __name__ == "__main__":
@@ -929,8 +932,8 @@ if __name__ == "__main__":
     swing_lows = swing_lows.reindex_like(small_price_bars['FINAL'])
 
     apds = [
-        mpf.make_addplot(small_price_bars['LOW'].where(long_signals, np.nan), type='scatter', marker='^'),
-        mpf.make_addplot(small_price_bars['HIGH'].where(short_signals, np.nan), type='scatter', marker='v'),
+        mpf.make_addplot(small_price_bars['LOW'].where(long_signals, np.nan), type='scatter', color='blue', marker='^'),
+        mpf.make_addplot(small_price_bars['HIGH'].where(short_signals, np.nan), type='scatter', color='orange', marker='v'),
         mpf.make_addplot(swing_highs, type='scatter', color='purple', marker='x'),
         mpf.make_addplot(swing_lows, type='scatter', color='yellow', marker='x'),
         mpf.make_addplot(orion_trades['red_fractals_prices'], type='scatter', color='red', marker='v'),

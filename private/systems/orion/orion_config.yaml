@@ -13,7 +13,7 @@ trading_rules:
          big_timeframe: '30 min'
          small_timeframe: '5 min'
          setup_lookback: 50
-         rr: 2.5
+         rr: 2.0
 
 instrument_weights:
   CL: 1.0

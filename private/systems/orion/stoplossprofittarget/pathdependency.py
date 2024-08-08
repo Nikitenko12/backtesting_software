@@ -812,13 +812,13 @@ if __name__ == "__main__":
 
     data = dbFuturesSimData()
 
-    # price_bars = data.get_backadjusted_futures_price('CL')
-    # price_bars = price_bars.loc[price_bars['FINAL'] != 0.0]
-    price_bars = pd.read_csv(get_resolved_pathname('data.NYMEX_DL_CL1!, 1') + '.csv', index_col=[0], parse_dates=True)[['open', 'high', 'low', 'close']].rename(
-        columns=dict(open='OPEN', high='HIGH', low='LOW', close='FINAL')
-    )
-    price_bars['VOLUME'] = 0
-    price_bars = price_bars.loc[price_bars.index.to_series().asof('2024-05-30 17:00:00-05:00'):price_bars.index.to_series().asof('2024-06-30 16:00:00-05:00')]
+    price_bars = data.get_backadjusted_futures_price('CL')
+    price_bars = price_bars.loc[price_bars['FINAL'] != 0.0]
+    # price_bars = pd.read_csv(get_resolved_pathname('data.NYMEX_DL_CL1!, 1') + '.csv', index_col=[0], parse_dates=True)[['open', 'high', 'low', 'close']].rename(
+    #     columns=dict(open='OPEN', high='HIGH', low='LOW', close='FINAL')
+    # )
+    # price_bars['VOLUME'] = 0
+    # price_bars = price_bars.loc[price_bars.index.to_series().asof('2024-05-30 17:00:00-05:00'):price_bars.index.to_series().asof('2024-06-30 16:00:00-05:00')]
 
     sessions = data.get_sessions_for_instrument('CL')
 
@@ -880,6 +880,10 @@ if __name__ == "__main__":
         mpf.make_addplot(orion_trades['green_fractals_prices'], type='scatter', color='green', marker='^'),
         mpf.make_addplot(new_orion_trades['long_limit_prices_after_slpt'], type='line', color='blue'),
         mpf.make_addplot(new_orion_trades['short_limit_prices_after_slpt'], type='line', color='blue'),
+        # mpf.make_addplot(small_price_bars.loc[orion_trades['demand_zones'].index, 'HIGH'].reindex_like(small_price_bars['FINAL']), type='scatter', color='pink',
+        #                  marker='o'),
+        # mpf.make_addplot(small_price_bars.loc[orion_trades['supply_zones'].index, 'LOW'].reindex_like(small_price_bars['FINAL']), type='scatter', color='pink',
+        #                  marker='o'),
         mpf.make_addplot(
             new_orion_trades['stop_loss_levels_after_slpt'], type='line', color='maroon',
             fill_between=dict(
@@ -1052,6 +1056,10 @@ if __name__ == "__main__":
     big_apds = [
         mpf.make_addplot(swing_highs.reindex_like(big_price_bars['FINAL']), type='scatter', color='purple', marker='x'),
         mpf.make_addplot(swing_lows.reindex_like(big_price_bars['FINAL']), type='scatter', color='yellow', marker='x'),
+        mpf.make_addplot(big_price_bars.loc[orion_trades['demand_zones'].index, 'HIGH'].reindex_like(big_price_bars['FINAL']), type='scatter', color='pink',
+                         marker='o'),
+        mpf.make_addplot(big_price_bars.loc[orion_trades['supply_zones'].index, 'LOW'].reindex_like(big_price_bars['FINAL']), type='scatter', color='pink',
+                         marker='o'),
     ]
 
     for dt, demand_zone in orion_trades['demand_zones'].iterrows():
