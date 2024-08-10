@@ -1,2 +1,5 @@
 Instrument,HoldRollCycle,RollOffsetDays,PricedRollCycle,ExpiryOffset
 CL,FGHJKMNQUVXZ,-20.0,FGHJKMNQUVXZ,-12.0
+ES,HMUZ,-10.0,1,HMUZ,12.0
+NQ,HMUZ,-10.0,1,HMUZ,12.0
+GC,GJMQVZ,-40.0,-1,GJMQVZ,23.0

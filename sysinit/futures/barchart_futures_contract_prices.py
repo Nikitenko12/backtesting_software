@@ -90,10 +90,10 @@ def strip_file_names(pathname):
 #     ET="SP500_micro",
 # )
 market_map = dict(
-    # NQ="NQ",
-    # ES="ES",
-    # GC="GC",
-    CL="CL",
+    NQ="NQ",
+    ES="ES",
+    GC="GC",
+    # CL="CL",
 )
 
 barchart_csv_config = ConfigCsvFuturesPrices(
@@ -122,5 +122,5 @@ def transfer_barchart_prices_to_arctic(datapath, frequencies):
 if __name__ == "__main__":
     input("Will overwrite existing prices are you sure?! CTL-C to abort")
     # modify flags as required
-    datapath = "sysinit.futures.bcutils.data.CL"
-    transfer_barchart_prices_to_arctic(datapath, [DAILY_PRICE_FREQ])
+    datapath = "sysinit.futures.bcutils.data"
+    transfer_barchart_prices_to_arctic(datapath, [MINUTE_FREQ])

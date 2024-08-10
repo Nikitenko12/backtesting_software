@@ -180,7 +180,6 @@ class influxData(object):
 
     def get_keynames_and_tags(self) -> dict:
         measurements = self.get_keynames()
-        measurements = [x.values['_value'] for x in measurements]
         keynames_and_tags = dict()
 
         for measurement in measurements:

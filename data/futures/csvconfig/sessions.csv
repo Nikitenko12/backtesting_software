@@ -1,2 +1,5 @@
 Instrument,SessionStartTime,SessionEndTime,Timezone
 CL,17:00:00,16:00:00,US/Central
+ES,17:00:00,16:00:00,US/Central
+NQ,17:00:00,16:00:00,US/Central
+GC,17:00:00,16:00:00,US/Central

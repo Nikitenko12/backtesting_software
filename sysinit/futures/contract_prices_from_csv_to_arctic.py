@@ -2,6 +2,7 @@ from syscore.constants import arg_not_supplied
 from syscore.dateutils import MIXED_FREQ, HOURLY_FREQ, DAILY_PRICE_FREQ, MINUTE_FREQ
 from syscore.pandas.frequency import merge_data_with_different_freq
 from sysdata.csv.csv_futures_contract_prices import csvFuturesContractPriceData
+from sysdata.sim.db_futures_sim_data import dbFuturesSimData
 from sysproduction.data.prices import diagPrices
 from sysobjects.contracts import futuresContract
 
