@@ -93,7 +93,7 @@ market_map = dict(
     NQ="NQ",
     ES="ES",
     GC="GC",
-    # CL="CL",
+    CL="CL",
 )
 
 barchart_csv_config = ConfigCsvFuturesPrices(

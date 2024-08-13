@@ -60,11 +60,11 @@ def init_db_with_csv_futures_contract_prices_for_code(
             ignore_duplication=True,
             frequency=frequency,
         )
-        print(f"Reading back {frequency} prices from db to check")
-        written_prices = db_prices.get_prices_at_frequency_for_contract_object(
-            contract, frequency=frequency
-        )
-        print("Read back prices are \n %s" % str(written_prices))
+        # print(f"Reading back {frequency} prices from db to check")
+        # written_prices = db_prices.get_prices_at_frequency_for_contract_object(
+        #     contract, frequency=frequency
+        # )
+        # print("Read back prices are \n %s" % str(written_prices))
 
         # if we're importing hourly or daily, we need to also generate MIXED
         if frequency != MIXED_FREQ:
