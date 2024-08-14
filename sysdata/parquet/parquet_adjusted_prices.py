@@ -58,7 +58,7 @@ class parquetFuturesAdjustedPricesData(futuresAdjustedPricesData):
         self, instrument_code: str, adjusted_price_data: futuresAdjustedPrices
     ):
         adjusted_price_data_aspd = pd.DataFrame(adjusted_price_data)
-        adjusted_price_data_aspd.columns = ["price"]
+        # adjusted_price_data_aspd.columns = ["price"]
         adjusted_price_data_aspd = adjusted_price_data_aspd.astype(float)
 
         self.parquet.write_data_given_data_type_and_identifier(

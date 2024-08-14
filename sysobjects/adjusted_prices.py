@@ -104,6 +104,7 @@ def _panama_stitch(
     for dateindex in list(valid_indexes)[1:]:
         current_calendar = complete_roll_calendar.loc[dateindex, :]
         current_contract_prices = individual_contracts[str(current_calendar.current_contract)]
+        print(current_calendar)
 
         if dateindex in current_contract_prices.index:
             current_row = current_contract_prices.loc[dateindex]
@@ -136,7 +137,7 @@ def _panama_stitch(
 def _roll_in_panama(adjusted_prices_values, previous_contract, previous_row, current_contract, current_row):
     # This is the sort of code you will need to change to adjust the roll logic
     # The roll differential is from the previous_row
-    roll_differential = previous_row.FINAL - previous_row.FINAL
+    roll_differential = current_row.FINAL - previous_row.FINAL
     if np.isnan(roll_differential):
         raise Exception(
             "On this day %s which should be a roll date we don't have prices for both %s and %s contracts"

@@ -315,7 +315,9 @@ if __name__ == "__main__":
 
     data = dbFuturesSimData()
 
-    price_bars = data.get_backadjusted_futures_price('CL')
+    instrument_code = 'ES'
+
+    price_bars = data.get_backadjusted_futures_price(instrument_code)
     price_bars = price_bars.loc[price_bars['FINAL'] != 0.0]
     # price_bars = pd.read_csv(get_resolved_pathname('data.NYMEX_DL_CL1!, 1') + '.csv', index_col=[0], parse_dates=True)[['open', 'high', 'low', 'close']].rename(
     #     columns=dict(open='OPEN', high='HIGH', low='LOW', close='FINAL')
@@ -323,7 +325,7 @@ if __name__ == "__main__":
     # price_bars['VOLUME'] = 0
     # price_bars = price_bars.loc[price_bars.index.to_series().asof('2024-05-30 17:00:00-05:00'):price_bars.index.to_series().asof('2024-06-30 16:00:00-05:00')]
 
-    sessions = data.get_sessions_for_instrument('CL')
+    sessions = data.get_sessions_for_instrument(instrument_code)
 
     small_price_bars = price_bars.resample('5T').agg(
         {

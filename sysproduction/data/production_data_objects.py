@@ -13,6 +13,14 @@ from sysdata.influxdb.influx_historic_strategy_positions import (
 from sysdata.influxdb.influx_historic_contract_positions import (
     influxContractPositionData,
 )
+from sysdata.parquet.parquet_adjusted_prices import parquetFuturesAdjustedPricesData
+from sysdata.parquet.parquet_capital import parquetCapitalData
+from sysdata.parquet.parquet_futures_per_contract_prices import parquetFuturesContractPriceData
+from sysdata.parquet.parquet_historic_contract_positions import parquetContractPositionData
+from sysdata.parquet.parquet_historic_strategy_positions import parquetStrategyPositionData
+from sysdata.parquet.parquet_optimal_positions import parquetOptimalPositionData
+from sysdata.parquet.parquet_spotfx_prices import parquetFxPricesData
+from sysdata.parquet.parquet_spreads import parquetSpreadsForInstrumentData
 
 """
 from sysdata.arctic.arctic_adjusted_prices import arcticFuturesAdjustedPricesData
@@ -67,18 +75,18 @@ BROKER_HISTORIC_ORDERS_DATA = "broker_historic_orders_data"
 ROLL_STATE_DATA = "roll_state_data"
 
 use_production_classes = {
-    FX_DATA: influxFxPricesData,
+    FX_DATA: parquetFxPricesData,
     ROLL_PARAMETERS_DATA: csvRollParametersData,
     FUTURES_INSTRUMENT_DATA: csvFuturesInstrumentData,
     FUTURES_CONTRACT_DATA: mongoFuturesContractData,
     STORED_SPREAD_DATA: mongoSpreadCostData,
-    FUTURES_CONTRACT_PRICE_DATA: influxFuturesContractPriceData,
-    FUTURES_ADJUSTED_PRICE_DATA: influxFuturesAdjustedPricesData,
-    CAPITAL_DATA: influxCapitalData,
-    CONTRACT_POSITION_DATA: influxContractPositionData,
-    STRATEGY_POSITION_DATA: influxStrategyPositionData,
-    OPTIMAL_POSITION_DATA: influxOptimalPositionData,
-    HISTORIC_SPREAD_DATA: influxSpreadsForInstrumentData,
+    FUTURES_CONTRACT_PRICE_DATA: parquetFuturesContractPriceData,
+    FUTURES_ADJUSTED_PRICE_DATA: parquetFuturesAdjustedPricesData,
+    CAPITAL_DATA: parquetCapitalData,
+    CONTRACT_POSITION_DATA: parquetContractPositionData,
+    STRATEGY_POSITION_DATA: parquetStrategyPositionData,
+    OPTIMAL_POSITION_DATA: parquetOptimalPositionData,
+    HISTORIC_SPREAD_DATA: parquetSpreadsForInstrumentData,
     STRATEGY_HISTORIC_ORDERS_DATA: mongoStrategyHistoricOrdersData,
     CONTRACT_HISTORIC_ORDERS_DATA: mongoContractHistoricOrdersData,
     BROKER_HISTORIC_ORDERS_DATA: mongoBrokerHistoricOrdersData,

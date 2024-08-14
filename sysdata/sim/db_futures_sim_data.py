@@ -13,6 +13,8 @@ from sysdata.csv.csv_roll_parameters import csvRollParametersData
 from sysdata.csv.csv_spread_costs import csvSpreadCostData
 from sysdata.csv.csv_sessions import csvSessionsData
 from sysdata.data_blob import dataBlob
+from sysdata.parquet.parquet_adjusted_prices import parquetFuturesAdjustedPricesData
+from sysdata.parquet.parquet_spotfx_prices import parquetFxPricesData
 from sysdata.sim.futures_sim_data_with_data_blob import genericBlobUsingFuturesSimData
 
 from syslogging.logger import *
@@ -61,10 +63,10 @@ def get_class_for_data_type(data_type: str):
 
 
 use_sim_classes = {
-    FX_DATA: influxFxPricesData,
+    FX_DATA: parquetFxPricesData, #influxFxPricesData,
     ROLL_PARAMETERS_DATA: csvRollParametersData,
     FUTURES_INSTRUMENT_DATA: csvFuturesInstrumentData,
-    FUTURES_ADJUSTED_PRICE_DATA: influxFuturesAdjustedPricesData,
+    FUTURES_ADJUSTED_PRICE_DATA: parquetFuturesAdjustedPricesData, #influxFuturesAdjustedPricesData,
     STORED_SPREAD_DATA: csvSpreadCostData,
     SESSIONS_DATA: csvSessionsData,
 }

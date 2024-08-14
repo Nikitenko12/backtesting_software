@@ -11,9 +11,12 @@ from sysdata.csv.csv_roll_calendars import csvRollCalendarData
 from sysdata.futures.roll_calendars import rollCalendarData
 
 from sysobjects.adjusted_prices import futuresAdjustedPrices
+from sysobjects.contracts import futuresContract
+from sysobjects.dict_of_futures_per_contract_prices import dictFuturesContractPrices
 from sysobjects.roll_calendars import rollCalendar
 
 from sysproduction.data.prices import diagPrices
+from itertools import compress
 
 diag_prices = diagPrices()
 
@@ -55,10 +58,30 @@ def process_adjusted_prices_single_instrument(
         csv_roll_calendar_data,
     ) = _get_data_inputs(csv_adj_data_path, csv_roll_calendar_data_path)
 
-    roll_calendar = csv_roll_calendar_data.get_roll_calendar(instrument_code)
-    influx_individual_contract_prices = influx_individual_contract_prices.get_prices_at_frequency_for_instrument(instrument_code, MINUTE_FREQ)
+    contract_dates_starting_when_i_want = (
+        influx_individual_contract_prices.contract_dates_with_price_data_at_frequency_for_instrument_code(
+            instrument_code, MINUTE_FREQ)
+    )
+    contract_dates_starting_when_i_want = list(compress(
+        contract_dates_starting_when_i_want, [
+            int(x) >= 20240100 for x in contract_dates_starting_when_i_want
+        ]
+    ))
 
-    roll_calendar = roll_calendar.iloc[-2:]
+    roll_calendar = csv_roll_calendar_data.get_roll_calendar(instrument_code)
+    roll_calendar = roll_calendar.loc[roll_calendar.current_contract >= 20240100]
+
+    influx_individual_contract_prices = dictFuturesContractPrices(
+        [
+            (
+                contract_date,
+                influx_individual_contract_prices.get_prices_at_frequency_for_contract_object(
+                    futuresContract(instrument_code, contract_date), frequency=MINUTE_FREQ,
+                ),
+            )
+            for contract_date in contract_dates_starting_when_i_want
+        ]
+    )
 
     adjusted_prices = futuresAdjustedPrices.stitch_individual_contracts_from_roll_calendars(
         influx_individual_contract_prices, roll_calendar
