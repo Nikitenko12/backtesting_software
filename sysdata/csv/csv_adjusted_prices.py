@@ -51,9 +51,9 @@ class csvFuturesAdjustedPricesData(futuresAdjustedPricesData):
             self.log.warning("Can't find adjusted price file %s" % filename)
             return futuresAdjustedPrices.create_empty()
 
-        instrpricedata.columns = ["price"]
-        instrpricedata = instrpricedata.groupby(level=0).last()
-        instrpricedata = pd.Series(instrpricedata.iloc[:, 0])
+        # instrpricedata.columns = ["price"]
+        # instrpricedata = instrpricedata.groupby(level=0).last()
+        # instrpricedata = pd.Series(instrpricedata.iloc[:, 0])
 
         instrpricedata = futuresAdjustedPrices(instrpricedata)
 
@@ -71,7 +71,7 @@ class csvFuturesAdjustedPricesData(futuresAdjustedPricesData):
     ):
         # Ensures the file will be written with a column header
         adjusted_price_data_as_dataframe = pd.DataFrame(adjusted_price_data)
-        adjusted_price_data_as_dataframe.columns = ["price"]
+        # adjusted_price_data_as_dataframe.columns = ["price"]
 
         filename = self._filename_given_instrument_code(instrument_code)
         adjusted_price_data_as_dataframe.to_csv(filename, index_label=DATE_INDEX_NAME)

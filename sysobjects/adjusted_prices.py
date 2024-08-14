@@ -54,7 +54,7 @@ class futuresAdjustedPrices(pd.DataFrame):
         :return: futuresAdjustedPrices
 
         """
-        adjusted_prices = _panama_stitch(individual_contracts, roll_calendar)
+        adjusted_prices = _panama_stitch_vectorized(individual_contracts, roll_calendar)
         return futuresAdjustedPrices(adjusted_prices)
 
     def update_with_individual_contract_prices_no_roll(
@@ -75,6 +75,47 @@ class futuresAdjustedPrices(pd.DataFrame):
         )
 
         return updated_adj
+
+
+def _panama_stitch_vectorized(
+    individual_contracts: dictFuturesContractPrices,
+    roll_calendar: rollCalendar,
+) -> pd.DataFrame:
+    individual_contracts = copy(individual_contracts)
+    roll_calendar = roll_calendar.tz_localize(individual_contracts[list(individual_contracts.keys())[0]].index[0].tz)
+
+    if individual_contracts.empty:
+        raise Exception("Can't stitch an empty dictFuturesContractPrices object")
+
+    initial_row = roll_calendar.iloc[0]
+    initial_contract = individual_contracts[str(initial_row.current_contract)]
+    current_contract = [initial_contract.loc[:initial_contract.index.to_series().asof(initial_row.name)]]
+    roll_differential = pd.Series(dtype=float, index=roll_calendar.index)
+    roll_differential.iloc[0] = 0.0
+
+    for roll_dt, row in roll_calendar.iterrows():
+        next_contract = individual_contracts[str(row.next_contract)]
+        actual_roll_dt = next_contract.index.to_series().asof(roll_dt)
+        current_contract.append(
+            next_contract.loc[actual_roll_dt:]
+        )
+
+        actual_roll_dt_for_previous_contract = current_contract[-2].index.to_series().asof(roll_dt)
+        roll_differential.loc[roll_dt] = (
+            current_contract[-1].loc[actual_roll_dt, 'FINAL'] - current_contract[-2].loc[actual_roll_dt_for_previous_contract, 'FINAL']
+        )
+        current_contract[-2] = current_contract[-2].loc[:actual_roll_dt_for_previous_contract]
+
+    current_contract = pd.concat(current_contract, axis=0).sort_index()
+    current_contract['index'] = current_contract.index
+    current_contract = current_contract.drop_duplicates(subset='index', keep='last').drop(columns=['index'])
+
+    price_index_series = current_contract.index.to_series()
+    for roll_dt, roll_diff in roll_differential.items():
+        actual_roll_dt = price_index_series.asof(roll_dt)
+        current_contract.loc[:actual_roll_dt, NOT_VOLUME_COLUMNS] += roll_diff
+
+    return current_contract
 
 
 def _panama_stitch(

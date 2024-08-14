@@ -247,6 +247,13 @@ def apply_limit_prices_slpt_to_signals(
         path_dep_df_after_limit_prices.dt_when_trade_exited.loc[path_dep_df_after_limit_prices.signals < 0]
     )]
 
+    if price_index_series.iloc[-1] in first_index_after_exit.index:
+        first_index_after_exit.drop(index=price_index_series.iloc[-1], inplace=True)
+    if price_index_series.iloc[-1] in first_index_after_exit_for_long_trades.index:
+        first_index_after_exit_for_long_trades.drop(index=price_index_series.iloc[-1], inplace=True)
+    if price_index_series.iloc[-1] in first_index_after_exit_for_short_trades.index:
+        first_index_after_exit_for_short_trades.drop(index=price_index_series.iloc[-1], inplace=True)
+
     forecasts = pd.Series(np.nan, index=prices.index)
     forecasts[path_dep_df_after_limit_prices.dt_when_limit_price_was_hit] = path_dep_df_after_limit_prices.signals
     forecasts[first_index_after_exit] = 0
@@ -315,10 +322,16 @@ if __name__ == "__main__":
 
     data = dbFuturesSimData()
 
-    instrument_code = 'ES'
+    instrument_code = 'CL'
+    rr = 2.0
+    small_timeframe = '5min'
+    big_timeframe = '30min'
 
     price_bars = data.get_backadjusted_futures_price(instrument_code)
     price_bars = price_bars.loc[price_bars['FINAL'] != 0.0]
+    price_bars = price_bars.iloc[1:]
+
+    # price_bars = price_bars.loc['2024-01-02 00:00:00':]
     # price_bars = pd.read_csv(get_resolved_pathname('data.NYMEX_DL_CL1!, 1') + '.csv', index_col=[0], parse_dates=True)[['open', 'high', 'low', 'close']].rename(
     #     columns=dict(open='OPEN', high='HIGH', low='LOW', close='FINAL')
     # )
@@ -327,29 +340,32 @@ if __name__ == "__main__":
 
     sessions = data.get_sessions_for_instrument(instrument_code)
 
-    small_price_bars = price_bars.resample('5T').agg(
-        {
-            'OPEN': 'first',
-            'HIGH': 'max',
-            'LOW': 'min',
-            'FINAL': 'last',
-            'VOLUME': 'sum',
-        }
-    )
-    small_price_bars = apply_sessions_to_aggregated_data(small_price_bars, sessions)
+    # small_price_bars = price_bars.resample('5T').agg(
+    #     {
+    #         'OPEN': 'first',
+    #         'HIGH': 'max',
+    #         'LOW': 'min',
+    #         'FINAL': 'last',
+    #         'VOLUME': 'sum',
+    #     }
+    # )
+    # small_price_bars = apply_sessions_to_aggregated_data(small_price_bars, sessions)
+    #
+    # big_price_bars = price_bars.resample('30T').agg(
+    #     {
+    #         'OPEN': 'first',
+    #         'HIGH': 'max',
+    #         'LOW': 'min',
+    #         'FINAL': 'last',
+    #         'VOLUME': 'sum',
+    #     }
+    # )
+    # big_price_bars = apply_sessions_to_aggregated_data(big_price_bars, sessions)
 
-    big_price_bars = price_bars.resample('30T').agg(
-        {
-            'OPEN': 'first',
-            'HIGH': 'max',
-            'LOW': 'min',
-            'FINAL': 'last',
-            'VOLUME': 'sum',
-        }
-    )
-    big_price_bars = apply_sessions_to_aggregated_data(big_price_bars, sessions)
+    orion_trades = orion(price_bars, sessions, small_timeframe=small_timeframe, big_timeframe=big_timeframe, rr=rr)
 
-    orion_trades = orion(price_bars, sessions, rr=2.0)
+    small_price_bars = orion_trades['small_price_bars']
+    big_price_bars = orion_trades['big_price_bars']
     long_signals = orion_trades['long_signals']
     short_signals = orion_trades['short_signals']
 
@@ -551,10 +567,11 @@ if __name__ == "__main__":
 
     plt.figure()
     plt.plot(profit.cumsum())
+    plt.title(f'{instrument_code} {rr}/1')
 
     trades_summary['signal'] = ["L" if x == 1 else "S" for x in trades_summary['signal']]
     trades_summary.reset_index(inplace=True, drop=True)
-    trades_summary.to_csv(get_resolved_pathname('private.systems.orion.trades_summary') + '.csv', sep='\t')
+    trades_summary.to_csv(get_resolved_pathname('private.systems.orion.trades_summary') + f'_{instrument_code}_{rr}-to-1.csv', sep='\t')
 
     ######################################
     big_apds = [

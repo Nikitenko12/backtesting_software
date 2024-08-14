@@ -64,12 +64,12 @@ def process_adjusted_prices_single_instrument(
     )
     contract_dates_starting_when_i_want = list(compress(
         contract_dates_starting_when_i_want, [
-            int(x) >= 20240100 for x in contract_dates_starting_when_i_want
+            int(x) >= 20140100 for x in contract_dates_starting_when_i_want
         ]
     ))
 
     roll_calendar = csv_roll_calendar_data.get_roll_calendar(instrument_code)
-    roll_calendar = roll_calendar.loc[roll_calendar.current_contract >= 20240100]
+    roll_calendar = roll_calendar.loc[roll_calendar.current_contract >= 20140100]
 
     influx_individual_contract_prices = dictFuturesContractPrices(
         [
@@ -93,6 +93,8 @@ def process_adjusted_prices_single_instrument(
         parquet_adjusted_prices.add_adjusted_prices(
             instrument_code, adjusted_prices, ignore_duplication=True
         )
+
+    csv_adjusted_prices.add_adjusted_prices(instrument_code, adjusted_prices, ignore_duplication=True)
 
     return adjusted_prices
 

@@ -220,6 +220,8 @@ def orion(minute_bars: pd.DataFrame, sessions: Session, big_timeframe='30T', sma
         green_fractals=green_fractals,
         red_fractals_prices=red_fractals_prices,
         green_fractals_prices=green_fractals_prices,
+        small_price_bars=small_price_bars,
+        big_price_bars=big_price_bars,
     )
 
     return return_dict

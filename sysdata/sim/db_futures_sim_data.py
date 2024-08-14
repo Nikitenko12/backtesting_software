@@ -16,6 +16,7 @@ from sysdata.data_blob import dataBlob
 from sysdata.parquet.parquet_adjusted_prices import parquetFuturesAdjustedPricesData
 from sysdata.parquet.parquet_spotfx_prices import parquetFxPricesData
 from sysdata.sim.futures_sim_data_with_data_blob import genericBlobUsingFuturesSimData
+from sysdata.csv.csv_adjusted_prices import csvFuturesAdjustedPricesData
 
 from syslogging.logger import *
 
