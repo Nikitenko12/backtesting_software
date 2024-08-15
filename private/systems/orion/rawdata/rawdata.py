@@ -154,7 +154,10 @@ class OrionRawData(SystemStage):
 
 
 def apply_sessions_to_aggregated_data(agg_price: pd.DataFrame, sessions: Session):
-    agg_price = agg_price.tz_localize('utc')
+    try:
+        agg_price = agg_price.tz_localize('utc')
+    except TypeError:
+        pass
     agg_price = agg_price.tz_convert(sessions.tzinfo)
     agg_price_index_in_sessions_tz = agg_price.index.tz_convert(sessions.tzinfo).to_series()
 

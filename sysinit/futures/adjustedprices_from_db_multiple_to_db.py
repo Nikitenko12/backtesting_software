@@ -8,6 +8,7 @@ from syscore.constants import arg_not_supplied
 from syscore.dateutils import MINUTE_FREQ
 from sysdata.csv.csv_adjusted_prices import csvFuturesAdjustedPricesData
 from sysdata.csv.csv_roll_calendars import csvRollCalendarData
+from sysdata.csv.csv_sessions import csvSessionsData
 from sysdata.futures.roll_calendars import rollCalendarData
 
 from sysobjects.adjusted_prices import futuresAdjustedPrices
@@ -21,19 +22,23 @@ from itertools import compress
 diag_prices = diagPrices()
 
 
-def _get_data_inputs(csv_adj_data_path, csv_roll_calendar_data_path):
+def _get_data_inputs(csv_adj_data_path, csv_roll_calendar_data_path, csv_sessions_data_path):
     db_individual_contract_prices = diag_prices.db_futures_contract_price_data
     db_adjusted_prices = diag_prices.db_futures_adjusted_prices_data
     csv_adjusted_prices = csvFuturesAdjustedPricesData(csv_adj_data_path)
     roll_calendar_data = csvRollCalendarData(csv_roll_calendar_data_path)
+    sessions_data = csvSessionsData(csv_sessions_data_path)
 
-    return db_individual_contract_prices, db_adjusted_prices, csv_adjusted_prices, roll_calendar_data
+    return db_individual_contract_prices, db_adjusted_prices, csv_adjusted_prices, roll_calendar_data, sessions_data
 
 
 def process_adjusted_prices_all_instruments(
-    csv_adj_data_path=arg_not_supplied, csv_roll_calendar_data_path=arg_not_supplied, ADD_TO_DB=True,
+    csv_adj_data_path=arg_not_supplied, csv_roll_calendar_data_path=arg_not_supplied, csv_sessions_data_path=arg_not_supplied,
+    ADD_TO_DB=True, backadjust: bool=False,
 ):
-    db_individual_contract_prices, _notused, _alsonotused, _notusedaswell = _get_data_inputs(csv_adj_data_path, csv_roll_calendar_data_path)
+    db_individual_contract_prices, _notused, _alsonotused, _notusedaswell, _notusedtoo = _get_data_inputs(
+        csv_adj_data_path, csv_roll_calendar_data_path, csv_sessions_data_path
+    )
     instrument_list = db_individual_contract_prices.get_list_of_instrument_codes_with_price_data_at_frequency(MINUTE_FREQ)
     for instrument_code in instrument_list:
         print(instrument_code)
@@ -41,7 +46,9 @@ def process_adjusted_prices_all_instruments(
             instrument_code,
             csv_adj_data_path=csv_adj_data_path,
             csv_roll_calendar_data_path=csv_roll_calendar_data_path,
+            csv_sessions_data_path=csv_sessions_data_path,
             ADD_TO_DB=ADD_TO_DB,
+            backadjust=backadjust,
         )
 
 
@@ -49,14 +56,17 @@ def process_adjusted_prices_single_instrument(
     instrument_code,
     csv_adj_data_path=arg_not_supplied,
     csv_roll_calendar_data_path=arg_not_supplied,
+    csv_sessions_data_path=arg_not_supplied,
     ADD_TO_DB=True,
+    backadjust: bool=False,
 ):
     (
         influx_individual_contract_prices,
         parquet_adjusted_prices,
         csv_adjusted_prices,
         csv_roll_calendar_data,
-    ) = _get_data_inputs(csv_adj_data_path, csv_roll_calendar_data_path)
+        sessions_data,
+    ) = _get_data_inputs(csv_adj_data_path, csv_roll_calendar_data_path, csv_sessions_data_path)
 
     contract_dates_starting_when_i_want = (
         influx_individual_contract_prices.contract_dates_with_price_data_at_frequency_for_instrument_code(
@@ -83,8 +93,10 @@ def process_adjusted_prices_single_instrument(
         ]
     )
 
+    sessions = sessions_data.get_sessions_for_instrument(instrument_code)
+
     adjusted_prices = futuresAdjustedPrices.stitch_individual_contracts_from_roll_calendars(
-        influx_individual_contract_prices, roll_calendar
+        influx_individual_contract_prices, roll_calendar, sessions, backadjust
     )
 
     print(adjusted_prices)
@@ -103,5 +115,5 @@ if __name__ == "__main__":
     input("Will overwrite existing prices are you sure?! CTL-C to abort")
     # modify flags and datapath as required
     process_adjusted_prices_all_instruments(
-        csv_adj_data_path=arg_not_supplied, csv_roll_calendar_data_path=arg_not_supplied, ADD_TO_DB=True,
+        csv_adj_data_path=arg_not_supplied, csv_roll_calendar_data_path=arg_not_supplied, ADD_TO_DB=True, backadjust=False,
     )

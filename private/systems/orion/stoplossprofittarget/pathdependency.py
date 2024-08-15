@@ -18,10 +18,10 @@ class StopLossProfitTarget(SystemStage):
         return "pathdependency"
 
     def get_inputs(self, instrument_code: str):
-        prices = self.get_prices(instrument_code)
         signals_dict = self.signals_dict(instrument_code)
         sessions = self.get_sessions(instrument_code)
 
+        prices = signals_dict['small_price_bars']
         long_signals = signals_dict['long_signals']
         short_signals = signals_dict['short_signals']
         long_limit_prices = signals_dict['long_limit_prices']
@@ -86,10 +86,10 @@ class StopLossProfitTarget(SystemStage):
     def signals_dict(self, instrument_code: str):
         return self.rules.get_raw_forecast(instrument_code, rule_variation_name='orion')
 
-    def get_prices(self, instrument_code: str):
-        return self.parent.rawdata.get_aggregated_minute_prices(
-            instrument_code, barsize=self.parent.config.trading_rules['orion']['other_args']['small_timeframe']
-        )
+    # def get_prices(self, instrument_code: str):
+    #     return self.parent.rawdata.get_aggregated_minute_prices(
+    #         instrument_code, barsize=self.parent.config.trading_rules['orion']['other_args']['small_timeframe']
+    #     )
 
     def get_sessions(self, instrument_code: str):
         return self.parent.rawdata.get_sessions(instrument_code)
@@ -330,13 +330,17 @@ if __name__ == "__main__":
     price_bars = data.get_backadjusted_futures_price(instrument_code)
     price_bars = price_bars.loc[price_bars['FINAL'] != 0.0]
     price_bars = price_bars.iloc[1:]
+    price_bars = price_bars.loc['2024-01-26 17:00:00-06:00':]
 
-    # price_bars = price_bars.loc['2024-01-02 00:00:00':]
     # price_bars = pd.read_csv(get_resolved_pathname('data.NYMEX_DL_CL1!, 1') + '.csv', index_col=[0], parse_dates=True)[['open', 'high', 'low', 'close']].rename(
     #     columns=dict(open='OPEN', high='HIGH', low='LOW', close='FINAL')
     # )
     # price_bars['VOLUME'] = 0
-    # price_bars = price_bars.loc[price_bars.index.to_series().asof('2024-05-30 17:00:00-05:00'):price_bars.index.to_series().asof('2024-06-30 16:00:00-05:00')]
+    # price_bars = price_bars.loc[price_bars.index.to_series().asof('2024-05-30 17:00:00-05:00'):price_bars.index.to_series().asof('2024-06-21 16:00:00-05:00')]
+
+    # price_bars = pd.read_csv(get_resolved_pathname('data.clu24_intraday-nearby-1min_historical-data-08-15-2024') + '.csv', index_col=[1], parse_dates=True)[
+    #     ['Open', 'High', 'Low', 'Last', 'Volume']
+    # ].rename(columns=dict(Open='OPEN', High='HIGH', Low='LOW', Last='FINAL', Volume='VOLUME'))
 
     sessions = data.get_sessions_for_instrument(instrument_code)
 
@@ -634,10 +638,10 @@ if __name__ == "__main__":
                 )
             )
 
-    mpf.plot(
-        big_price_bars[['OPEN', 'HIGH', 'LOW', 'FINAL']].rename(
-            columns=dict(OPEN="Open", HIGH="High", LOW="Low", FINAL="Close")),
-        type='candle',
-        show_nontrading=False,
-        addplot=big_apds,
-    )
+    # mpf.plot(
+    #     big_price_bars[['OPEN', 'HIGH', 'LOW', 'FINAL']].rename(
+    #         columns=dict(OPEN="Open", HIGH="High", LOW="Low", FINAL="Close")),
+    #     type='candle',
+    #     show_nontrading=False,
+    #     addplot=big_apds,
+    # )

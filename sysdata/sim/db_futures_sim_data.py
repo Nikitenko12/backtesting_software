@@ -64,10 +64,10 @@ def get_class_for_data_type(data_type: str):
 
 
 use_sim_classes = {
-    FX_DATA: parquetFxPricesData, #influxFxPricesData,
+    FX_DATA: parquetFxPricesData, # influxFxPricesData, #
     ROLL_PARAMETERS_DATA: csvRollParametersData,
     FUTURES_INSTRUMENT_DATA: csvFuturesInstrumentData,
-    FUTURES_ADJUSTED_PRICE_DATA: parquetFuturesAdjustedPricesData, #influxFuturesAdjustedPricesData,
+    FUTURES_ADJUSTED_PRICE_DATA: parquetFuturesAdjustedPricesData, # influxFuturesAdjustedPricesData, #
     STORED_SPREAD_DATA: csvSpreadCostData,
     SESSIONS_DATA: csvSessionsData,
 }

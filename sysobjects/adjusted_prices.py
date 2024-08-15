@@ -1,3 +1,4 @@
+import datetime
 from copy import copy
 
 import numpy as np
@@ -15,6 +16,7 @@ from sysobjects.futures_per_contract_prices import (
 )
 from sysobjects.dict_of_futures_per_contract_prices import dictFuturesContractPrices
 from sysobjects.roll_calendars import rollCalendar
+from sysobjects.sessions import Session
 
 
 class futuresAdjustedPrices(pd.DataFrame):
@@ -41,6 +43,8 @@ class futuresAdjustedPrices(pd.DataFrame):
         futuresAdjustedPrices,
         individual_contracts: dictFuturesContractPrices,
         roll_calendar: rollCalendar,
+        sessions: Session,
+        backadjust: bool=True,
     ):
         """
         Do backstitching of multiple prices using panama method
@@ -54,7 +58,7 @@ class futuresAdjustedPrices(pd.DataFrame):
         :return: futuresAdjustedPrices
 
         """
-        adjusted_prices = _panama_stitch_vectorized(individual_contracts, roll_calendar)
+        adjusted_prices = _panama_stitch_vectorized(individual_contracts, roll_calendar, sessions, backadjust)
         return futuresAdjustedPrices(adjusted_prices)
 
     def update_with_individual_contract_prices_no_roll(
@@ -80,40 +84,51 @@ class futuresAdjustedPrices(pd.DataFrame):
 def _panama_stitch_vectorized(
     individual_contracts: dictFuturesContractPrices,
     roll_calendar: rollCalendar,
+    sessions: Session,
+    backadjust: bool=True,
 ) -> pd.DataFrame:
     individual_contracts = copy(individual_contracts)
-    roll_calendar = roll_calendar.tz_localize(individual_contracts[list(individual_contracts.keys())[0]].index[0].tz)
+    roll_calendar = roll_calendar.tz_localize(sessions.tzinfo)
 
     if individual_contracts.empty:
         raise Exception("Can't stitch an empty dictFuturesContractPrices object")
 
     initial_row = roll_calendar.iloc[0]
-    initial_contract = individual_contracts[str(initial_row.current_contract)]
+    initial_contract = individual_contracts[str(initial_row.current_contract)].tz_localize('utc').tz_convert(sessions.tzinfo)
     current_contract = [initial_contract.loc[:initial_contract.index.to_series().asof(initial_row.name)]]
     roll_differential = pd.Series(dtype=float, index=roll_calendar.index)
     roll_differential.iloc[0] = 0.0
 
     for roll_dt, row in roll_calendar.iterrows():
-        next_contract = individual_contracts[str(row.next_contract)]
-        actual_roll_dt = next_contract.index.to_series().asof(roll_dt)
+        if sessions.start_time > sessions.end_time:
+            roll_date = roll_dt.date() - pd.Timedelta(days=1)
+        else:
+            roll_date = roll_dt.date()
+        session_start_dt_for_roll = pd.Timestamp(f'{roll_date} {sessions.start_time}', tzinfo=sessions.tzinfo)
+        next_contract = individual_contracts[str(row.next_contract)].tz_localize('utc').tz_convert(sessions.tzinfo)
+
+        actual_roll_dt = next_contract.index.to_series().asof(session_start_dt_for_roll)
         current_contract.append(
             next_contract.loc[actual_roll_dt:]
         )
 
-        actual_roll_dt_for_previous_contract = current_contract[-2].index.to_series().asof(roll_dt)
-        roll_differential.loc[roll_dt] = (
+        actual_roll_dt_for_previous_contract = current_contract[-2].index.to_series().asof(session_start_dt_for_roll)
+        roll_differential.loc[session_start_dt_for_roll] = (
             current_contract[-1].loc[actual_roll_dt, 'FINAL'] - current_contract[-2].loc[actual_roll_dt_for_previous_contract, 'FINAL']
         )
         current_contract[-2] = current_contract[-2].loc[:actual_roll_dt_for_previous_contract]
+
+        roll_differential.drop(index=roll_dt, inplace=True)
 
     current_contract = pd.concat(current_contract, axis=0).sort_index()
     current_contract['index'] = current_contract.index
     current_contract = current_contract.drop_duplicates(subset='index', keep='last').drop(columns=['index'])
 
-    price_index_series = current_contract.index.to_series()
-    for roll_dt, roll_diff in roll_differential.items():
-        actual_roll_dt = price_index_series.asof(roll_dt)
-        current_contract.loc[:actual_roll_dt, NOT_VOLUME_COLUMNS] += roll_diff
+    if backadjust:
+        price_index_series = current_contract.index.to_series()
+        for roll_dt, roll_diff in roll_differential.items():
+            actual_roll_dt = price_index_series.asof(roll_dt)
+            current_contract.loc[:actual_roll_dt, NOT_VOLUME_COLUMNS] += roll_diff
 
     return current_contract
 
