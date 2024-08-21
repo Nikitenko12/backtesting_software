@@ -323,25 +323,25 @@ if __name__ == "__main__":
     data = dbFuturesSimData()
 
     instrument_code = 'CL'
-    rr = 2.0
+    rr = 2.5
     small_timeframe = '5min'
     big_timeframe = '30min'
 
-    price_bars = data.get_backadjusted_futures_price(instrument_code)
-    price_bars = price_bars.loc[price_bars['FINAL'] != 0.0]
-    price_bars = price_bars.iloc[1:]
-    price_bars = price_bars.loc['2024-01-26 17:00:00-06:00':]
+    # price_bars = data.get_backadjusted_futures_price(instrument_code)
+    # price_bars = price_bars.loc[price_bars['FINAL'] != 0.0]
+    # price_bars = price_bars.iloc[1:]
+    # price_bars = price_bars.loc['2024-01-26 17:00:00-06:00':]
 
-    # price_bars = pd.read_csv(get_resolved_pathname('data.NYMEX_DL_CL1!, 1') + '.csv', index_col=[0], parse_dates=True)[['open', 'high', 'low', 'close']].rename(
-    #     columns=dict(open='OPEN', high='HIGH', low='LOW', close='FINAL')
-    # )
-    # price_bars['VOLUME'] = 0
-    # price_bars = price_bars.loc[price_bars.index.to_series().asof('2024-05-30 17:00:00-05:00'):price_bars.index.to_series().asof('2024-06-21 16:00:00-05:00')]
+    price_bars = pd.read_csv(get_resolved_pathname('data.NYMEX_DL_CL1!, 5') + '.csv', index_col=[0], parse_dates=True)[['open', 'high', 'low', 'close']].rename(
+        columns=dict(open='OPEN', high='HIGH', low='LOW', close='FINAL')
+    )
+    price_bars['VOLUME'] = 0
 
     # price_bars = pd.read_csv(get_resolved_pathname('data.clu24_intraday-nearby-1min_historical-data-08-15-2024') + '.csv', index_col=[1], parse_dates=True)[
     #     ['Open', 'High', 'Low', 'Last', 'Volume']
     # ].rename(columns=dict(Open='OPEN', High='HIGH', Low='LOW', Last='FINAL', Volume='VOLUME'))
 
+    price_bars = price_bars.loc['2024-05-05 18:00:00-04:00':'2024-06-22 17:00:00-04:00']
     sessions = data.get_sessions_for_instrument(instrument_code)
 
     # small_price_bars = price_bars.resample('5T').agg(
